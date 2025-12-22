@@ -1,0 +1,2173 @@
+{
+  "project": {
+    "name": "AI-Ops Platform",
+    "description": "AI-Powered Managed Services Operations Platform - Transforming reactive IT operations into predictive, proactive, and autonomous systems",
+    "version": "1.0.0",
+    "tech_stack": {
+      "frontend": {
+        "framework": "React 18+",
+        "language": "TypeScript",
+        "state_management": "Redux Toolkit + RTK Query",
+        "ui_library": "Material UI v5 or Ant Design",
+        "charts": "Recharts / Apache ECharts",
+        "real_time": "Socket.io-client",
+        "routing": "React Router v6",
+        "forms": "React Hook Form + Zod validation",
+        "testing": "Jest + React Testing Library + Cypress"
+      },
+      "backend": {
+        "framework": "FastAPI",
+        "language": "Python 3.11+",
+        "orm": "SQLAlchemy 2.0 + Alembic migrations",
+        "async": "asyncio + httpx",
+        "task_queue": "Celery + Redis",
+        "ml_framework": "scikit-learn, TensorFlow/PyTorch, Prophet",
+        "nlp": "spaCy, Hugging Face Transformers",
+        "testing": "pytest + pytest-asyncio",
+        "api_docs": "OpenAPI/Swagger (built-in)"
+      },
+      "databases": {
+        "primary": "PostgreSQL 15+",
+        "time_series": "TimescaleDB or InfluxDB",
+        "cache": "Redis",
+        "search": "Elasticsearch",
+        "vector_db": "Pinecone or Milvus (for AI embeddings)"
+      },
+      "infrastructure": {
+        "containerization": "Docker + Docker Compose",
+        "orchestration": "Kubernetes",
+        "message_queue": "RabbitMQ or Apache Kafka",
+        "monitoring": "Prometheus + Grafana",
+        "logging": "ELK Stack (Elasticsearch, Logstash, Kibana)"
+      }
+    }
+  },
+
+  "architecture": {
+    "pattern": "Microservices with API Gateway",
+    "services": [
+      {
+        "name": "api-gateway",
+        "description": "Central entry point, routing, rate limiting, authentication"
+      },
+      {
+        "name": "auth-service",
+        "description": "Authentication, authorization, RBAC, SSO integration"
+      },
+      {
+        "name": "operations-service",
+        "description": "Intelligent operations platform, incident management, alert correlation"
+      },
+      {
+        "name": "service-desk-service",
+        "description": "AI-powered service desk, virtual agents, ticket management"
+      },
+      {
+        "name": "cloud-optimization-service",
+        "description": "Cloud cost management, resource optimization, multi-cloud intelligence"
+      },
+      {
+        "name": "security-ops-service",
+        "description": "Security operations, behavioral analytics, threat detection"
+      },
+      {
+        "name": "devops-service",
+        "description": "CI/CD integration, deployment risk scoring, code analysis"
+      },
+      {
+        "name": "data-platform-service",
+        "description": "Data ingestion, quality monitoring, analytics engine"
+      },
+      {
+        "name": "network-ops-service",
+        "description": "Network monitoring, predictive analysis, SD-WAN optimization"
+      },
+      {
+        "name": "ml-engine-service",
+        "description": "Centralized ML model training, serving, and management"
+      },
+      {
+        "name": "notification-service",
+        "description": "Multi-channel notifications, escalations, on-call management"
+      },
+      {
+        "name": "integration-service",
+        "description": "Third-party integrations, webhooks, API connectors"
+      }
+    ]
+  },
+
+  "database_schema": {
+    "core_entities": {
+      "organizations": {
+        "id": "UUID PRIMARY KEY",
+        "name": "VARCHAR(255) NOT NULL",
+        "slug": "VARCHAR(100) UNIQUE",
+        "settings": "JSONB",
+        "subscription_tier": "VARCHAR(50)",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "users": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "email": "VARCHAR(255) UNIQUE NOT NULL",
+        "password_hash": "VARCHAR(255)",
+        "first_name": "VARCHAR(100)",
+        "last_name": "VARCHAR(100)",
+        "role": "VARCHAR(50)",
+        "permissions": "JSONB",
+        "preferences": "JSONB",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "last_login": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "teams": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255) NOT NULL",
+        "description": "TEXT",
+        "team_type": "VARCHAR(50)",
+        "escalation_policy_id": "UUID",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "team_members": {
+        "id": "UUID PRIMARY KEY",
+        "team_id": "UUID REFERENCES teams(id)",
+        "user_id": "UUID REFERENCES users(id)",
+        "role": "VARCHAR(50)",
+        "is_on_call": "BOOLEAN DEFAULT FALSE"
+      }
+    },
+
+    "operations_module": {
+      "incidents": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "incident_number": "VARCHAR(50) UNIQUE",
+        "title": "VARCHAR(500) NOT NULL",
+        "description": "TEXT",
+        "status": "VARCHAR(50) NOT NULL",
+        "priority": "VARCHAR(20)",
+        "severity": "VARCHAR(20)",
+        "impact": "VARCHAR(20)",
+        "urgency": "VARCHAR(20)",
+        "category": "VARCHAR(100)",
+        "subcategory": "VARCHAR(100)",
+        "assigned_team_id": "UUID REFERENCES teams(id)",
+        "assigned_user_id": "UUID REFERENCES users(id)",
+        "reported_by_id": "UUID REFERENCES users(id)",
+        "affected_services": "JSONB",
+        "business_impact_score": "DECIMAL(5,2)",
+        "ai_classification": "JSONB",
+        "ai_suggested_resolution": "TEXT",
+        "ai_confidence_score": "DECIMAL(3,2)",
+        "root_cause": "TEXT",
+        "resolution_notes": "TEXT",
+        "is_predicted": "BOOLEAN DEFAULT FALSE",
+        "prediction_source_id": "UUID",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "acknowledged_at": "TIMESTAMP WITH TIME ZONE",
+        "resolved_at": "TIMESTAMP WITH TIME ZONE",
+        "closed_at": "TIMESTAMP WITH TIME ZONE",
+        "sla_breach_at": "TIMESTAMP WITH TIME ZONE",
+        "metadata": "JSONB"
+      },
+      "alerts": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "alert_id_external": "VARCHAR(255)",
+        "source": "VARCHAR(100) NOT NULL",
+        "source_type": "VARCHAR(50)",
+        "title": "VARCHAR(500)",
+        "message": "TEXT",
+        "severity": "VARCHAR(20)",
+        "status": "VARCHAR(50)",
+        "host": "VARCHAR(255)",
+        "service": "VARCHAR(255)",
+        "metric_name": "VARCHAR(255)",
+        "metric_value": "DECIMAL(20,5)",
+        "threshold_value": "DECIMAL(20,5)",
+        "tags": "JSONB",
+        "correlation_id": "UUID",
+        "incident_id": "UUID REFERENCES incidents(id)",
+        "is_suppressed": "BOOLEAN DEFAULT FALSE",
+        "suppression_reason": "TEXT",
+        "ai_correlation_score": "DECIMAL(3,2)",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "acknowledged_at": "TIMESTAMP WITH TIME ZONE",
+        "resolved_at": "TIMESTAMP WITH TIME ZONE",
+        "raw_payload": "JSONB"
+      },
+      "alert_correlations": {
+        "id": "UUID PRIMARY KEY",
+        "correlation_group_id": "UUID NOT NULL",
+        "alert_id": "UUID REFERENCES alerts(id)",
+        "correlation_type": "VARCHAR(50)",
+        "confidence_score": "DECIMAL(3,2)",
+        "correlation_reason": "TEXT",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "predictions": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "prediction_type": "VARCHAR(100)",
+        "entity_type": "VARCHAR(100)",
+        "entity_id": "VARCHAR(255)",
+        "predicted_event": "VARCHAR(255)",
+        "probability": "DECIMAL(3,2)",
+        "confidence_interval_lower": "DECIMAL(3,2)",
+        "confidence_interval_upper": "DECIMAL(3,2)",
+        "predicted_time": "TIMESTAMP WITH TIME ZONE",
+        "prediction_window_hours": "INTEGER",
+        "model_id": "UUID",
+        "model_version": "VARCHAR(50)",
+        "features_used": "JSONB",
+        "status": "VARCHAR(50)",
+        "actual_outcome": "VARCHAR(50)",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "expires_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "automated_remediations": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "incident_id": "UUID REFERENCES incidents(id)",
+        "alert_id": "UUID REFERENCES alerts(id)",
+        "remediation_type": "VARCHAR(100)",
+        "playbook_id": "UUID",
+        "status": "VARCHAR(50)",
+        "triggered_by": "VARCHAR(50)",
+        "approval_required": "BOOLEAN DEFAULT FALSE",
+        "approved_by_id": "UUID REFERENCES users(id)",
+        "execution_log": "JSONB",
+        "result": "JSONB",
+        "started_at": "TIMESTAMP WITH TIME ZONE",
+        "completed_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "playbooks": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255) NOT NULL",
+        "description": "TEXT",
+        "trigger_conditions": "JSONB",
+        "steps": "JSONB",
+        "requires_approval": "BOOLEAN DEFAULT FALSE",
+        "approval_roles": "JSONB",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "execution_count": "INTEGER DEFAULT 0",
+        "success_rate": "DECIMAL(5,2)",
+        "avg_execution_time_seconds": "INTEGER",
+        "created_by_id": "UUID REFERENCES users(id)",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "service_desk_module": {
+      "tickets": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "ticket_number": "VARCHAR(50) UNIQUE",
+        "type": "VARCHAR(50)",
+        "title": "VARCHAR(500) NOT NULL",
+        "description": "TEXT",
+        "status": "VARCHAR(50)",
+        "priority": "VARCHAR(20)",
+        "category": "VARCHAR(100)",
+        "subcategory": "VARCHAR(100)",
+        "requester_id": "UUID REFERENCES users(id)",
+        "assigned_team_id": "UUID REFERENCES teams(id)",
+        "assigned_user_id": "UUID REFERENCES users(id)",
+        "channel": "VARCHAR(50)",
+        "ai_classification": "JSONB",
+        "ai_sentiment": "VARCHAR(20)",
+        "ai_urgency_score": "DECIMAL(3,2)",
+        "ai_suggested_category": "VARCHAR(100)",
+        "ai_suggested_assignee_id": "UUID",
+        "ai_auto_resolved": "BOOLEAN DEFAULT FALSE",
+        "resolution_notes": "TEXT",
+        "satisfaction_rating": "INTEGER",
+        "satisfaction_comment": "TEXT",
+        "related_incident_id": "UUID REFERENCES incidents(id)",
+        "sla_policy_id": "UUID",
+        "first_response_at": "TIMESTAMP WITH TIME ZONE",
+        "resolved_at": "TIMESTAMP WITH TIME ZONE",
+        "closed_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "ticket_conversations": {
+        "id": "UUID PRIMARY KEY",
+        "ticket_id": "UUID REFERENCES tickets(id)",
+        "sender_type": "VARCHAR(20)",
+        "sender_id": "UUID",
+        "message": "TEXT NOT NULL",
+        "is_internal": "BOOLEAN DEFAULT FALSE",
+        "is_ai_generated": "BOOLEAN DEFAULT FALSE",
+        "ai_model_used": "VARCHAR(100)",
+        "attachments": "JSONB",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "virtual_agent_sessions": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "user_id": "UUID REFERENCES users(id)",
+        "session_token": "VARCHAR(255)",
+        "channel": "VARCHAR(50)",
+        "status": "VARCHAR(50)",
+        "conversation_history": "JSONB",
+        "intent_detected": "VARCHAR(100)",
+        "entities_extracted": "JSONB",
+        "resolution_status": "VARCHAR(50)",
+        "escalated_to_ticket_id": "UUID REFERENCES tickets(id)",
+        "satisfaction_rating": "INTEGER",
+        "started_at": "TIMESTAMP WITH TIME ZONE",
+        "ended_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "knowledge_base_articles": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "title": "VARCHAR(500) NOT NULL",
+        "slug": "VARCHAR(255)",
+        "content": "TEXT",
+        "content_html": "TEXT",
+        "category": "VARCHAR(100)",
+        "tags": "JSONB",
+        "status": "VARCHAR(50)",
+        "view_count": "INTEGER DEFAULT 0",
+        "helpfulness_score": "DECIMAL(3,2)",
+        "ai_embedding": "VECTOR(1536)",
+        "related_ticket_categories": "JSONB",
+        "author_id": "UUID REFERENCES users(id)",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE",
+        "published_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "canned_responses": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "content": "TEXT",
+        "category": "VARCHAR(100)",
+        "variables": "JSONB",
+        "usage_count": "INTEGER DEFAULT 0",
+        "created_by_id": "UUID REFERENCES users(id)",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "cloud_optimization_module": {
+      "cloud_accounts": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "provider": "VARCHAR(50) NOT NULL",
+        "account_id": "VARCHAR(255)",
+        "account_name": "VARCHAR(255)",
+        "credentials_encrypted": "TEXT",
+        "regions_enabled": "JSONB",
+        "sync_status": "VARCHAR(50)",
+        "last_sync_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "cloud_resources": {
+        "id": "UUID PRIMARY KEY",
+        "cloud_account_id": "UUID REFERENCES cloud_accounts(id)",
+        "resource_id": "VARCHAR(255)",
+        "resource_type": "VARCHAR(100)",
+        "resource_name": "VARCHAR(255)",
+        "region": "VARCHAR(50)",
+        "status": "VARCHAR(50)",
+        "configuration": "JSONB",
+        "tags": "JSONB",
+        "monthly_cost": "DECIMAL(12,2)",
+        "currency": "VARCHAR(3) DEFAULT 'USD'",
+        "utilization_avg_cpu": "DECIMAL(5,2)",
+        "utilization_avg_memory": "DECIMAL(5,2)",
+        "utilization_avg_storage": "DECIMAL(5,2)",
+        "utilization_avg_network": "DECIMAL(5,2)",
+        "rightsizing_recommendation": "JSONB",
+        "is_idle": "BOOLEAN DEFAULT FALSE",
+        "idle_since": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE",
+        "discovered_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "cost_records": {
+        "id": "UUID PRIMARY KEY",
+        "cloud_account_id": "UUID REFERENCES cloud_accounts(id)",
+        "resource_id": "UUID REFERENCES cloud_resources(id)",
+        "date": "DATE NOT NULL",
+        "service": "VARCHAR(100)",
+        "usage_type": "VARCHAR(255)",
+        "usage_quantity": "DECIMAL(20,10)",
+        "usage_unit": "VARCHAR(50)",
+        "cost": "DECIMAL(12,4)",
+        "currency": "VARCHAR(3)",
+        "tags": "JSONB"
+      },
+      "cost_anomalies": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "cloud_account_id": "UUID REFERENCES cloud_accounts(id)",
+        "resource_id": "UUID REFERENCES cloud_resources(id)",
+        "anomaly_type": "VARCHAR(100)",
+        "detected_value": "DECIMAL(12,2)",
+        "expected_value": "DECIMAL(12,2)",
+        "deviation_percentage": "DECIMAL(8,2)",
+        "severity": "VARCHAR(20)",
+        "status": "VARCHAR(50)",
+        "root_cause_analysis": "TEXT",
+        "ai_explanation": "TEXT",
+        "detected_at": "TIMESTAMP WITH TIME ZONE",
+        "acknowledged_at": "TIMESTAMP WITH TIME ZONE",
+        "resolved_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "optimization_recommendations": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "cloud_account_id": "UUID REFERENCES cloud_accounts(id)",
+        "resource_id": "UUID REFERENCES cloud_resources(id)",
+        "recommendation_type": "VARCHAR(100)",
+        "title": "VARCHAR(500)",
+        "description": "TEXT",
+        "current_state": "JSONB",
+        "recommended_state": "JSONB",
+        "estimated_monthly_savings": "DECIMAL(12,2)",
+        "estimated_annual_savings": "DECIMAL(12,2)",
+        "effort_level": "VARCHAR(20)",
+        "risk_level": "VARCHAR(20)",
+        "status": "VARCHAR(50)",
+        "implemented_at": "TIMESTAMP WITH TIME ZONE",
+        "actual_savings": "DECIMAL(12,2)",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "expires_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "budgets": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "budget_type": "VARCHAR(50)",
+        "amount": "DECIMAL(12,2)",
+        "currency": "VARCHAR(3)",
+        "period": "VARCHAR(20)",
+        "start_date": "DATE",
+        "end_date": "DATE",
+        "filters": "JSONB",
+        "alert_thresholds": "JSONB",
+        "current_spend": "DECIMAL(12,2)",
+        "forecasted_spend": "DECIMAL(12,2)",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "security_ops_module": {
+      "security_events": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "event_id_external": "VARCHAR(255)",
+        "source": "VARCHAR(100)",
+        "event_type": "VARCHAR(100)",
+        "severity": "VARCHAR(20)",
+        "title": "VARCHAR(500)",
+        "description": "TEXT",
+        "source_ip": "INET",
+        "destination_ip": "INET",
+        "user_id": "VARCHAR(255)",
+        "user_email": "VARCHAR(255)",
+        "device_id": "VARCHAR(255)",
+        "asset_id": "UUID",
+        "action": "VARCHAR(100)",
+        "outcome": "VARCHAR(50)",
+        "risk_score": "DECIMAL(5,2)",
+        "mitre_attack_tactics": "JSONB",
+        "mitre_attack_techniques": "JSONB",
+        "indicators_of_compromise": "JSONB",
+        "ai_analysis": "JSONB",
+        "is_anomaly": "BOOLEAN DEFAULT FALSE",
+        "anomaly_score": "DECIMAL(3,2)",
+        "investigation_id": "UUID",
+        "raw_log": "JSONB",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "ingested_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "security_investigations": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "investigation_number": "VARCHAR(50)",
+        "title": "VARCHAR(500)",
+        "description": "TEXT",
+        "status": "VARCHAR(50)",
+        "severity": "VARCHAR(20)",
+        "priority": "VARCHAR(20)",
+        "assigned_analyst_id": "UUID REFERENCES users(id)",
+        "related_events_count": "INTEGER",
+        "ai_summary": "TEXT",
+        "ai_recommended_actions": "JSONB",
+        "ai_risk_assessment": "JSONB",
+        "timeline": "JSONB",
+        "affected_assets": "JSONB",
+        "affected_users": "JSONB",
+        "containment_actions": "JSONB",
+        "eradication_actions": "JSONB",
+        "recovery_actions": "JSONB",
+        "lessons_learned": "TEXT",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "started_at": "TIMESTAMP WITH TIME ZONE",
+        "contained_at": "TIMESTAMP WITH TIME ZONE",
+        "resolved_at": "TIMESTAMP WITH TIME ZONE",
+        "closed_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "user_behavior_profiles": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "user_identifier": "VARCHAR(255)",
+        "user_type": "VARCHAR(50)",
+        "baseline_profile": "JSONB",
+        "current_profile": "JSONB",
+        "risk_score": "DECIMAL(5,2)",
+        "risk_factors": "JSONB",
+        "typical_login_hours": "JSONB",
+        "typical_locations": "JSONB",
+        "typical_devices": "JSONB",
+        "typical_applications": "JSONB",
+        "anomalies_detected_count": "INTEGER DEFAULT 0",
+        "last_activity_at": "TIMESTAMP WITH TIME ZONE",
+        "profile_updated_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "threat_intelligence": {
+        "id": "UUID PRIMARY KEY",
+        "indicator_type": "VARCHAR(50)",
+        "indicator_value": "VARCHAR(500)",
+        "threat_type": "VARCHAR(100)",
+        "severity": "VARCHAR(20)",
+        "confidence": "DECIMAL(3,2)",
+        "source": "VARCHAR(100)",
+        "description": "TEXT",
+        "tags": "JSONB",
+        "first_seen": "TIMESTAMP WITH TIME ZONE",
+        "last_seen": "TIMESTAMP WITH TIME ZONE",
+        "expires_at": "TIMESTAMP WITH TIME ZONE",
+        "is_active": "BOOLEAN DEFAULT TRUE"
+      },
+      "security_playbooks": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "description": "TEXT",
+        "trigger_type": "VARCHAR(100)",
+        "trigger_conditions": "JSONB",
+        "steps": "JSONB",
+        "requires_approval": "BOOLEAN DEFAULT TRUE",
+        "approval_roles": "JSONB",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "devops_module": {
+      "applications": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "description": "TEXT",
+        "repository_url": "VARCHAR(500)",
+        "repository_type": "VARCHAR(50)",
+        "default_branch": "VARCHAR(100)",
+        "language": "VARCHAR(50)",
+        "framework": "VARCHAR(100)",
+        "team_id": "UUID REFERENCES teams(id)",
+        "criticality": "VARCHAR(20)",
+        "environments": "JSONB",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "deployments": {
+        "id": "UUID PRIMARY KEY",
+        "application_id": "UUID REFERENCES applications(id)",
+        "environment": "VARCHAR(50)",
+        "version": "VARCHAR(100)",
+        "commit_sha": "VARCHAR(40)",
+        "commit_message": "TEXT",
+        "deployed_by_id": "UUID REFERENCES users(id)",
+        "deployment_type": "VARCHAR(50)",
+        "status": "VARCHAR(50)",
+        "risk_score": "DECIMAL(3,2)",
+        "risk_factors": "JSONB",
+        "ai_risk_assessment": "JSONB",
+        "change_size": "INTEGER",
+        "files_changed": "INTEGER",
+        "lines_added": "INTEGER",
+        "lines_removed": "INTEGER",
+        "test_coverage": "DECIMAL(5,2)",
+        "tests_passed": "INTEGER",
+        "tests_failed": "INTEGER",
+        "security_vulnerabilities": "JSONB",
+        "rollback_of_deployment_id": "UUID",
+        "rolled_back_at": "TIMESTAMP WITH TIME ZONE",
+        "started_at": "TIMESTAMP WITH TIME ZONE",
+        "completed_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "deployment_metrics": {
+        "id": "UUID PRIMARY KEY",
+        "deployment_id": "UUID REFERENCES deployments(id)",
+        "metric_type": "VARCHAR(100)",
+        "metric_name": "VARCHAR(255)",
+        "value_before": "DECIMAL(20,5)",
+        "value_after": "DECIMAL(20,5)",
+        "change_percentage": "DECIMAL(8,2)",
+        "measurement_window_minutes": "INTEGER",
+        "is_degradation": "BOOLEAN DEFAULT FALSE",
+        "measured_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "code_analysis_results": {
+        "id": "UUID PRIMARY KEY",
+        "application_id": "UUID REFERENCES applications(id)",
+        "commit_sha": "VARCHAR(40)",
+        "pull_request_id": "VARCHAR(100)",
+        "analysis_type": "VARCHAR(100)",
+        "tool": "VARCHAR(100)",
+        "status": "VARCHAR(50)",
+        "findings": "JSONB",
+        "critical_count": "INTEGER DEFAULT 0",
+        "high_count": "INTEGER DEFAULT 0",
+        "medium_count": "INTEGER DEFAULT 0",
+        "low_count": "INTEGER DEFAULT 0",
+        "ai_summary": "TEXT",
+        "ai_recommendations": "JSONB",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "pipeline_runs": {
+        "id": "UUID PRIMARY KEY",
+        "application_id": "UUID REFERENCES applications(id)",
+        "pipeline_id_external": "VARCHAR(255)",
+        "pipeline_name": "VARCHAR(255)",
+        "trigger_type": "VARCHAR(50)",
+        "trigger_ref": "VARCHAR(255)",
+        "status": "VARCHAR(50)",
+        "stages": "JSONB",
+        "duration_seconds": "INTEGER",
+        "ai_optimized_tests": "BOOLEAN DEFAULT FALSE",
+        "tests_skipped_by_ai": "INTEGER",
+        "time_saved_seconds": "INTEGER",
+        "started_at": "TIMESTAMP WITH TIME ZONE",
+        "completed_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "network_ops_module": {
+      "network_devices": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "device_id_external": "VARCHAR(255)",
+        "name": "VARCHAR(255)",
+        "type": "VARCHAR(100)",
+        "vendor": "VARCHAR(100)",
+        "model": "VARCHAR(100)",
+        "firmware_version": "VARCHAR(100)",
+        "ip_address": "INET",
+        "mac_address": "MACADDR",
+        "location": "VARCHAR(255)",
+        "status": "VARCHAR(50)",
+        "configuration": "JSONB",
+        "last_seen_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "network_interfaces": {
+        "id": "UUID PRIMARY KEY",
+        "device_id": "UUID REFERENCES network_devices(id)",
+        "interface_name": "VARCHAR(100)",
+        "interface_type": "VARCHAR(50)",
+        "status": "VARCHAR(50)",
+        "speed_mbps": "INTEGER",
+        "ip_addresses": "JSONB",
+        "vlan": "INTEGER",
+        "description": "TEXT"
+      },
+      "network_metrics": {
+        "time": "TIMESTAMP WITH TIME ZONE NOT NULL",
+        "device_id": "UUID REFERENCES network_devices(id)",
+        "interface_id": "UUID REFERENCES network_interfaces(id)",
+        "metric_type": "VARCHAR(100)",
+        "bytes_in": "BIGINT",
+        "bytes_out": "BIGINT",
+        "packets_in": "BIGINT",
+        "packets_out": "BIGINT",
+        "errors_in": "INTEGER",
+        "errors_out": "INTEGER",
+        "utilization_percentage": "DECIMAL(5,2)",
+        "latency_ms": "DECIMAL(10,3)",
+        "jitter_ms": "DECIMAL(10,3)",
+        "packet_loss_percentage": "DECIMAL(5,2)"
+      },
+      "network_predictions": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "device_id": "UUID REFERENCES network_devices(id)",
+        "interface_id": "UUID REFERENCES network_interfaces(id)",
+        "prediction_type": "VARCHAR(100)",
+        "predicted_value": "DECIMAL(20,5)",
+        "prediction_time": "TIMESTAMP WITH TIME ZONE",
+        "confidence": "DECIMAL(3,2)",
+        "model_version": "VARCHAR(50)",
+        "threshold_breach_predicted": "BOOLEAN DEFAULT FALSE",
+        "recommended_action": "TEXT",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "sdwan_policies": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "description": "TEXT",
+        "application_categories": "JSONB",
+        "routing_rules": "JSONB",
+        "qos_settings": "JSONB",
+        "ai_optimized": "BOOLEAN DEFAULT FALSE",
+        "optimization_history": "JSONB",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "data_platform_module": {
+      "data_sources": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "type": "VARCHAR(100)",
+        "connection_config": "JSONB",
+        "schema_info": "JSONB",
+        "sync_schedule": "VARCHAR(100)",
+        "last_sync_at": "TIMESTAMP WITH TIME ZONE",
+        "sync_status": "VARCHAR(50)",
+        "row_count": "BIGINT",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "data_quality_rules": {
+        "id": "UUID PRIMARY KEY",
+        "data_source_id": "UUID REFERENCES data_sources(id)",
+        "name": "VARCHAR(255)",
+        "rule_type": "VARCHAR(100)",
+        "column_name": "VARCHAR(255)",
+        "rule_definition": "JSONB",
+        "severity": "VARCHAR(20)",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "data_quality_results": {
+        "id": "UUID PRIMARY KEY",
+        "rule_id": "UUID REFERENCES data_quality_rules(id)",
+        "run_at": "TIMESTAMP WITH TIME ZONE",
+        "status": "VARCHAR(50)",
+        "records_checked": "BIGINT",
+        "records_passed": "BIGINT",
+        "records_failed": "BIGINT",
+        "pass_rate": "DECIMAL(5,2)",
+        "failure_samples": "JSONB",
+        "ai_analysis": "TEXT"
+      },
+      "data_catalog_entries": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "data_source_id": "UUID REFERENCES data_sources(id)",
+        "name": "VARCHAR(255)",
+        "type": "VARCHAR(50)",
+        "description": "TEXT",
+        "ai_generated_description": "TEXT",
+        "schema_definition": "JSONB",
+        "tags": "JSONB",
+        "classifications": "JSONB",
+        "pii_detected": "BOOLEAN DEFAULT FALSE",
+        "pii_columns": "JSONB",
+        "lineage": "JSONB",
+        "popularity_score": "DECIMAL(5,2)",
+        "quality_score": "DECIMAL(5,2)",
+        "embedding": "VECTOR(1536)",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "natural_language_queries": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "user_id": "UUID REFERENCES users(id)",
+        "natural_language_query": "TEXT",
+        "generated_sql": "TEXT",
+        "target_tables": "JSONB",
+        "execution_status": "VARCHAR(50)",
+        "execution_time_ms": "INTEGER",
+        "result_row_count": "INTEGER",
+        "user_feedback": "VARCHAR(20)",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "ml_models_module": {
+      "ml_models": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "model_type": "VARCHAR(100)",
+        "purpose": "VARCHAR(255)",
+        "algorithm": "VARCHAR(100)",
+        "framework": "VARCHAR(50)",
+        "current_version": "VARCHAR(50)",
+        "status": "VARCHAR(50)",
+        "training_config": "JSONB",
+        "feature_columns": "JSONB",
+        "target_column": "VARCHAR(255)",
+        "performance_metrics": "JSONB",
+        "created_at": "TIMESTAMP WITH TIME ZONE",
+        "updated_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "ml_model_versions": {
+        "id": "UUID PRIMARY KEY",
+        "model_id": "UUID REFERENCES ml_models(id)",
+        "version": "VARCHAR(50)",
+        "status": "VARCHAR(50)",
+        "training_data_start": "TIMESTAMP WITH TIME ZONE",
+        "training_data_end": "TIMESTAMP WITH TIME ZONE",
+        "training_samples": "INTEGER",
+        "validation_samples": "INTEGER",
+        "metrics": "JSONB",
+        "hyperparameters": "JSONB",
+        "artifact_path": "VARCHAR(500)",
+        "model_size_bytes": "BIGINT",
+        "trained_at": "TIMESTAMP WITH TIME ZONE",
+        "deployed_at": "TIMESTAMP WITH TIME ZONE",
+        "retired_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "ml_predictions_log": {
+        "id": "UUID PRIMARY KEY",
+        "model_id": "UUID REFERENCES ml_models(id)",
+        "model_version": "VARCHAR(50)",
+        "input_features": "JSONB",
+        "prediction": "JSONB",
+        "confidence": "DECIMAL(3,2)",
+        "latency_ms": "INTEGER",
+        "actual_outcome": "JSONB",
+        "feedback": "VARCHAR(50)",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "model_drift_metrics": {
+        "id": "UUID PRIMARY KEY",
+        "model_id": "UUID REFERENCES ml_models(id)",
+        "metric_type": "VARCHAR(100)",
+        "metric_value": "DECIMAL(10,5)",
+        "threshold": "DECIMAL(10,5)",
+        "is_drift_detected": "BOOLEAN DEFAULT FALSE",
+        "drift_severity": "VARCHAR(20)",
+        "measured_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "governance_module": {
+      "audit_logs": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "user_id": "UUID REFERENCES users(id)",
+        "action": "VARCHAR(100)",
+        "resource_type": "VARCHAR(100)",
+        "resource_id": "VARCHAR(255)",
+        "changes": "JSONB",
+        "ip_address": "INET",
+        "user_agent": "TEXT",
+        "ai_decision_id": "UUID",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "ai_decisions": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "decision_type": "VARCHAR(100)",
+        "model_id": "UUID REFERENCES ml_models(id)",
+        "model_version": "VARCHAR(50)",
+        "input_data": "JSONB",
+        "output_data": "JSONB",
+        "confidence_score": "DECIMAL(3,2)",
+        "explanation": "TEXT",
+        "feature_importance": "JSONB",
+        "human_override": "BOOLEAN DEFAULT FALSE",
+        "override_reason": "TEXT",
+        "override_by_id": "UUID REFERENCES users(id)",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "compliance_checks": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "check_type": "VARCHAR(100)",
+        "framework": "VARCHAR(100)",
+        "control_id": "VARCHAR(100)",
+        "resource_type": "VARCHAR(100)",
+        "resource_id": "VARCHAR(255)",
+        "status": "VARCHAR(50)",
+        "findings": "JSONB",
+        "remediation_steps": "JSONB",
+        "checked_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "ethical_reviews": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "model_id": "UUID REFERENCES ml_models(id)",
+        "review_type": "VARCHAR(100)",
+        "status": "VARCHAR(50)",
+        "bias_assessment": "JSONB",
+        "fairness_metrics": "JSONB",
+        "impact_assessment": "JSONB",
+        "recommendations": "JSONB",
+        "reviewer_id": "UUID REFERENCES users(id)",
+        "reviewed_at": "TIMESTAMP WITH TIME ZONE",
+        "next_review_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "integrations_module": {
+      "integration_configs": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "integration_type": "VARCHAR(100)",
+        "name": "VARCHAR(255)",
+        "provider": "VARCHAR(100)",
+        "config": "JSONB",
+        "credentials_encrypted": "TEXT",
+        "status": "VARCHAR(50)",
+        "last_health_check": "TIMESTAMP WITH TIME ZONE",
+        "health_status": "VARCHAR(50)",
+        "sync_frequency": "VARCHAR(50)",
+        "last_sync_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "webhooks": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "url": "VARCHAR(500)",
+        "events": "JSONB",
+        "headers": "JSONB",
+        "secret": "VARCHAR(255)",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "retry_config": "JSONB",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "webhook_deliveries": {
+        "id": "UUID PRIMARY KEY",
+        "webhook_id": "UUID REFERENCES webhooks(id)",
+        "event_type": "VARCHAR(100)",
+        "payload": "JSONB",
+        "status": "VARCHAR(50)",
+        "response_code": "INTEGER",
+        "response_body": "TEXT",
+        "attempt_count": "INTEGER DEFAULT 1",
+        "delivered_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    },
+
+    "notifications_module": {
+      "notification_channels": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "type": "VARCHAR(50)",
+        "config": "JSONB",
+        "is_default": "BOOLEAN DEFAULT FALSE",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "notification_rules": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "event_type": "VARCHAR(100)",
+        "conditions": "JSONB",
+        "channels": "JSONB",
+        "recipients": "JSONB",
+        "template_id": "UUID",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "notifications": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "rule_id": "UUID REFERENCES notification_rules(id)",
+        "channel_id": "UUID REFERENCES notification_channels(id)",
+        "recipient_id": "UUID",
+        "recipient_type": "VARCHAR(50)",
+        "event_type": "VARCHAR(100)",
+        "title": "VARCHAR(500)",
+        "message": "TEXT",
+        "status": "VARCHAR(50)",
+        "sent_at": "TIMESTAMP WITH TIME ZONE",
+        "delivered_at": "TIMESTAMP WITH TIME ZONE",
+        "read_at": "TIMESTAMP WITH TIME ZONE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "on_call_schedules": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "team_id": "UUID REFERENCES teams(id)",
+        "name": "VARCHAR(255)",
+        "timezone": "VARCHAR(50)",
+        "rotation_type": "VARCHAR(50)",
+        "rotation_config": "JSONB",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      },
+      "escalation_policies": {
+        "id": "UUID PRIMARY KEY",
+        "organization_id": "UUID REFERENCES organizations(id)",
+        "name": "VARCHAR(255)",
+        "description": "TEXT",
+        "rules": "JSONB",
+        "repeat_count": "INTEGER DEFAULT 0",
+        "repeat_interval_minutes": "INTEGER",
+        "is_active": "BOOLEAN DEFAULT TRUE",
+        "created_at": "TIMESTAMP WITH TIME ZONE"
+      }
+    }
+  },
+
+  "api_endpoints": {
+    "authentication": {
+      "prefix": "/api/v1/auth",
+      "endpoints": [
+        { "method": "POST", "path": "/register", "description": "Register new organization and admin user" },
+        { "method": "POST", "path": "/login", "description": "User login, returns JWT tokens" },
+        { "method": "POST", "path": "/logout", "description": "Invalidate refresh token" },
+        { "method": "POST", "path": "/refresh", "description": "Refresh access token" },
+        { "method": "POST", "path": "/forgot-password", "description": "Initiate password reset" },
+        { "method": "POST", "path": "/reset-password", "description": "Complete password reset" },
+        { "method": "GET", "path": "/me", "description": "Get current user profile" },
+        { "method": "PUT", "path": "/me", "description": "Update current user profile" },
+        { "method": "POST", "path": "/sso/saml", "description": "SAML SSO authentication" },
+        { "method": "GET", "path": "/sso/oauth/{provider}", "description": "OAuth SSO initiation" },
+        { "method": "POST", "path": "/sso/oauth/{provider}/callback", "description": "OAuth callback" },
+        { "method": "POST", "path": "/mfa/enable", "description": "Enable MFA for user" },
+        { "method": "POST", "path": "/mfa/verify", "description": "Verify MFA code" },
+        { "method": "POST", "path": "/mfa/disable", "description": "Disable MFA" }
+      ]
+    },
+
+    "organizations": {
+      "prefix": "/api/v1/organizations",
+      "endpoints": [
+        { "method": "GET", "path": "/", "description": "Get current organization details" },
+        { "method": "PUT", "path": "/", "description": "Update organization settings" },
+        { "method": "GET", "path": "/users", "description": "List organization users" },
+        { "method": "POST", "path": "/users", "description": "Invite new user" },
+        { "method": "PUT", "path": "/users/{user_id}", "description": "Update user" },
+        { "method": "DELETE", "path": "/users/{user_id}", "description": "Remove user" },
+        { "method": "GET", "path": "/teams", "description": "List teams" },
+        { "method": "POST", "path": "/teams", "description": "Create team" },
+        { "method": "PUT", "path": "/teams/{team_id}", "description": "Update team" },
+        { "method": "DELETE", "path": "/teams/{team_id}", "description": "Delete team" },
+        { "method": "GET", "path": "/teams/{team_id}/members", "description": "List team members" },
+        { "method": "POST", "path": "/teams/{team_id}/members", "description": "Add team member" },
+        { "method": "DELETE", "path": "/teams/{team_id}/members/{user_id}", "description": "Remove team member" },
+        { "method": "GET", "path": "/audit-logs", "description": "Get audit logs" },
+        { "method": "GET", "path": "/settings", "description": "Get all settings" },
+        { "method": "PUT", "path": "/settings", "description": "Update settings" }
+      ]
+    },
+
+    "incidents": {
+      "prefix": "/api/v1/incidents",
+      "endpoints": [
+        { "method": "GET", "path": "/", "description": "List incidents with filters and pagination" },
+        { "method": "POST", "path": "/", "description": "Create new incident" },
+        { "method": "GET", "path": "/{incident_id}", "description": "Get incident details" },
+        { "method": "PUT", "path": "/{incident_id}", "description": "Update incident" },
+        { "method": "POST", "path": "/{incident_id}/acknowledge", "description": "Acknowledge incident" },
+        { "method": "POST", "path": "/{incident_id}/resolve", "description": "Resolve incident" },
+        { "method": "POST", "path": "/{incident_id}/close", "description": "Close incident" },
+        { "method": "POST", "path": "/{incident_id}/reopen", "description": "Reopen incident" },
+        { "method": "POST", "path": "/{incident_id}/escalate", "description": "Escalate incident" },
+        { "method": "POST", "path": "/{incident_id}/assign", "description": "Assign incident" },
+        { "method": "GET", "path": "/{incident_id}/timeline", "description": "Get incident timeline" },
+        { "method": "POST", "path": "/{incident_id}/comments", "description": "Add comment" },
+        { "method": "GET", "path": "/{incident_id}/related", "description": "Get related incidents" },
+        { "method": "GET", "path": "/{incident_id}/ai-analysis", "description": "Get AI analysis and recommendations" },
+        { "method": "POST", "path": "/{incident_id}/run-playbook", "description": "Execute remediation playbook" },
+        { "method": "GET", "path": "/statistics", "description": "Get incident statistics" },
+        { "method": "GET", "path": "/trends", "description": "Get incident trends" }
+      ]
+    },
+
+    "alerts": {
+      "prefix": "/api/v1/alerts",
+      "endpoints": [
+        { "method": "GET", "path": "/", "description": "List alerts with filters" },
+        { "method": "POST", "path": "/", "description": "Ingest new alert (webhook)" },
+        { "method": "GET", "path": "/{alert_id}", "description": "Get alert details" },
+        { "method": "POST", "path": "/{alert_id}/acknowledge", "description": "Acknowledge alert" },
+        { "method": "POST", "path": "/{alert_id}/resolve", "description": "Resolve alert" },
+        { "method": "POST", "path": "/{alert_id}/suppress", "description": "Suppress alert" },
+        { "method": "POST", "path": "/{alert_id}/create-incident", "description": "Create incident from alert" },
+        { "method": "GET", "path": "/correlations", "description": "Get correlated alert groups" },
+        { "method": "GET", "path": "/sources", "description": "List alert sources" },
+        { "method": "POST", "path": "/sources", "description": "Configure new alert source" },
+        { "method": "GET", "path": "/rules", "description": "List alert rules" },
+        { "method": "POST", "path": "/rules", "description": "Create alert rule" },
+        { "method": "PUT", "path": "/rules/{rule_id}", "description": "Update alert rule" },
+        { "method": "DELETE", "path": "/rules/{rule_id}", "description": "Delete alert rule" }
+      ]
+    },
+
+    "predictions": {
+      "prefix": "/api/v1/predictions",
+      "endpoints": [
+        { "method": "GET", "path": "/", "description": "List active predictions" },
+        { "method": "GET", "path": "/{prediction_id}", "description": "Get prediction details" },
+        { "method": "POST", "path": "/{prediction_id}/acknowledge", "description": "Acknowledge prediction" },
+        { "method": "POST", "path": "/{prediction_id}/dismiss", "description": "Dismiss prediction" },
+        { "method": "POST", "path": "/{prediction_id}/feedback", "description": "Provide feedback on prediction accuracy" },
+        { "method": "GET", "path": "/models", "description": "List prediction models" },
+        { "method": "GET", "path": "/models/{model_id}/performance", "description": "Get model performance metrics" },
+        { "method": "POST", "path": "/models/{model_id}/retrain", "description": "Trigger model retraining" }
+      ]
+    },
+
+    "playbooks": {
+      "prefix": "/api/v1/playbooks",
+      "endpoints": [
+        { "method": "GET", "path": "/", "description": "List playbooks" },
+        { "method": "POST", "path": "/", "description": "Create playbook" },
+        { "method": "GET", "path": "/{playbook_id}", "description": "Get playbook details" },
+        { "method": "PUT", "path": "/{playbook_id}", "description": "Update playbook" },
+        { "method": "DELETE", "path": "/{playbook_id}", "description": "Delete playbook" },
+        { "method": "POST", "path": "/{playbook_id}/execute", "description": "Execute playbook manually" },
+        { "method": "GET", "path": "/{playbook_id}/executions", "description": "List playbook executions" },
+        { "method": "GET", "path": "/executions/{execution_id}", "description": "Get execution details" },
+        { "method": "POST", "path": "/executions/{execution_id}/approve", "description": "Approve pending execution" },
+        { "method": "POST", "path": "/executions/{execution_id}/cancel", "description": "Cancel execution" }
+      ]
+    },
+
+    "service_desk": {
+      "prefix": "/api/v1/service-desk",
+      "tickets": {
+        "prefix": "/tickets",
+        "endpoints": [
+          { "method": "GET", "path": "/", "description": "List tickets with filters" },
+          { "method": "POST", "path": "/", "description": "Create new ticket" },
+          { "method": "GET", "path": "/{ticket_id}", "description": "Get ticket details" },
+          { "method": "PUT", "path": "/{ticket_id}", "description": "Update ticket" },
+          { "method": "POST", "path": "/{ticket_id}/assign", "description": "Assign ticket" },
+          { "method": "POST", "path": "/{ticket_id}/resolve", "description": "Resolve ticket" },
+          { "method": "POST", "path": "/{ticket_id}/close", "description": "Close ticket" },
+          { "method": "POST", "path": "/{ticket_id}/reopen", "description": "Reopen ticket" },
+          { "method": "GET", "path": "/{ticket_id}/conversations", "description": "Get ticket conversations" },
+          { "method": "POST", "path": "/{ticket_id}/conversations", "description": "Add conversation reply" },
+          { "method": "GET", "path": "/{ticket_id}/ai-suggestions", "description": "Get AI response suggestions" },
+          { "method": "POST", "path": "/{ticket_id}/satisfaction", "description": "Submit satisfaction rating" },
+          { "method": "GET", "path": "/statistics", "description": "Get ticket statistics" },
+          { "method": "GET", "path": "/sla-report", "description": "Get SLA compliance report" }
+        ]
+      },
+      "virtual_agent": {
+        "prefix": "/virtual-agent",
+        "endpoints": [
+          { "method": "POST", "path": "/sessions", "description": "Start new virtual agent session" },
+          { "method": "POST", "path": "/sessions/{session_id}/message", "description": "Send message to virtual agent" },
+          { "method": "GET", "path": "/sessions/{session_id}", "description": "Get session history" },
+          { "method": "POST", "path": "/sessions/{session_id}/end", "description": "End session" },
+          { "method": "POST", "path": "/sessions/{session_id}/escalate", "description": "Escalate to human agent" },
+          { "method": "POST", "path": "/sessions/{session_id}/feedback", "description": "Submit session feedback" },
+          { "method": "GET", "path": "/analytics", "description": "Get virtual agent analytics" }
+        ]
+      },
+      "knowledge_base": {
+        "prefix": "/knowledge-base",
+        "endpoints": [
+          { "method": "GET", "path": "/articles", "description": "List articles" },
+          { "method": "POST", "path": "/articles", "description": "Create article" },
+          { "method": "GET", "path": "/articles/{article_id}", "description": "Get article" },
+          { "method": "PUT", "path": "/articles/{article_id}", "description": "Update article" },
+          { "method": "DELETE", "path": "/articles/{article_id}", "description": "Delete article" },
+          { "method": "POST", "path": "/articles/{article_id}/publish", "description": "Publish article" },
+          { "method": "GET", "path": "/search", "description": "Search articles (semantic search)" },
+          { "method": "POST", "path": "/articles/{article_id}/feedback", "description": "Submit article feedback" },
+          { "method": "GET", "path": "/categories", "description": "List categories" },
+          { "method": "POST", "path": "/ai-generate", "description": "Generate article from ticket patterns" }
+        ]
+      }
+    },
+
+    "cloud_optimization": {
+      "prefix": "/api/v1/cloud",
+      "endpoints": [
+        { "method": "GET", "path": "/accounts", "description": "List cloud accounts" },
+        { "method": "POST", "path": "/accounts", "description": "Add cloud account" },
+        { "method": "GET", "path": "/accounts/{account_id}", "description": "Get account details" },
+        { "method": "PUT", "path": "/accounts/{account_id}", "description": "Update account" },
+        { "method": "DELETE", "path": "/accounts/{account_id}", "description": "Remove account" },
+        { "method": "POST", "path": "/accounts/{account_id}/sync", "description": "Trigger sync" },
+        { "method": "GET", "path": "/resources", "description": "List all resources" },
+        { "method": "GET", "path": "/resources/{resource_id}", "description": "Get resource details" },
+        { "method": "GET", "path": "/resources/{resource_id}/metrics", "description": "Get resource metrics" },
+        { "method": "GET", "path": "/costs/summary", "description": "Get cost summary" },
+        { "method": "GET", "path": "/costs/breakdown", "description": "Get cost breakdown" },
+        { "method": "GET", "path": "/costs/trends", "description": "Get cost trends" },
+        { "method": "GET", "path": "/costs/forecast", "description": "Get cost forecast" },
+        { "method": "GET", "path": "/anomalies", "description": "List cost anomalies" },
+        { "method": "GET", "path": "/anomalies/{anomaly_id}", "description": "Get anomaly details" },
+        { "method": "POST", "path": "/anomalies/{anomaly_id}/acknowledge", "description": "Acknowledge anomaly" },
+        { "method": "GET", "path": "/recommendations", "description": "List optimization recommendations" },
+        { "method": "GET", "path": "/recommendations/{rec_id}", "description": "Get recommendation details" },
+        { "method": "POST", "path": "/recommendations/{rec_id}/implement", "description": "Implement recommendation" },
+        { "method": "POST", "path": "/recommendations/{rec_id}/dismiss", "description": "Dismiss recommendation" },
+        { "method": "GET", "path": "/budgets", "description": "List budgets" },
+        { "method": "POST", "path": "/budgets", "description": "Create budget" },
+        { "method": "PUT", "path": "/budgets/{budget_id}", "description": "Update budget" },
+        { "method": "DELETE", "path": "/budgets/{budget_id}", "description": "Delete budget" },
+        { "method": "GET", "path": "/idle-resources", "description": "List idle resources" },
+        { "method": "GET", "path": "/rightsizing", "description": "Get rightsizing recommendations" },
+        { "method": "GET", "path": "/reserved-instances", "description": "Get RI recommendations" },
+        { "method": "GET", "path": "/savings-plans", "description": "Get savings plan recommendations" }
+      ]
+    },
+
+    "security": {
+      "prefix": "/api/v1/security",
+      "endpoints": [
+        { "method": "GET", "path": "/events", "description": "List security events" },
+        { "method": "GET", "path": "/events/{event_id}", "description": "Get event details" },
+        { "method": "GET", "path": "/investigations", "description": "List investigations" },
+        { "method": "POST", "path": "/investigations", "description": "Create investigation" },
+        { "method": "GET", "path": "/investigations/{inv_id}", "description": "Get investigation details" },
+        { "method": "PUT", "path": "/investigations/{inv_id}", "description": "Update investigation" },
+        { "method": "POST", "path": "/investigations/{inv_id}/events", "description": "Add events to investigation" },
+        { "method": "GET", "path": "/investigations/{inv_id}/timeline", "description": "Get investigation timeline" },
+        { "method": "POST", "path": "/investigations/{inv_id}/actions", "description": "Execute response action" },
+        { "method": "GET", "path": "/user-behavior", "description": "List user behavior profiles" },
+        { "method": "GET", "path": "/user-behavior/{user_id}", "description": "Get user behavior profile" },
+        { "method": "GET", "path": "/user-behavior/{user_id}/anomalies", "description": "Get user anomalies" },
+        { "method": "GET", "path": "/threat-intelligence", "description": "Search threat intelligence" },
+        { "method": "POST", "path": "/threat-intelligence", "description": "Add threat indicator" },
+        { "method": "GET", "path": "/playbooks", "description": "List security playbooks" },
+        { "method": "POST", "path": "/playbooks", "description": "Create security playbook" },
+        { "method": "GET", "path": "/dashboard", "description": "Get security dashboard data" },
+        { "method": "GET", "path": "/compliance", "description": "Get compliance status" },
+        { "method": "GET", "path": "/risk-score", "description": "Get organization risk score" }
+      ]
+    },
+
+    "devops": {
+      "prefix": "/api/v1/devops",
+      "endpoints": [
+        { "method": "GET", "path": "/applications", "description": "List applications" },
+        { "method": "POST", "path": "/applications", "description": "Register application" },
+        { "method": "GET", "path": "/applications/{app_id}", "description": "Get application details" },
+        { "method": "PUT", "path": "/applications/{app_id}", "description": "Update application" },
+        { "method": "DELETE", "path": "/applications/{app_id}", "description": "Remove application" },
+        { "method": "GET", "path": "/deployments", "description": "List deployments" },
+        { "method": "GET", "path": "/deployments/{deploy_id}", "description": "Get deployment details" },
+        { "method": "GET", "path": "/deployments/{deploy_id}/metrics", "description": "Get deployment impact metrics" },
+        { "method": "POST", "path": "/deployments/{deploy_id}/rollback", "description": "Rollback deployment" },
+        { "method": "GET", "path": "/deployments/risk-assessment", "description": "Get pending deployment risk" },
+        { "method": "GET", "path": "/pipelines", "description": "List pipeline runs" },
+        { "method": "GET", "path": "/pipelines/{run_id}", "description": "Get pipeline run details" },
+        { "method": "GET", "path": "/code-analysis", "description": "List code analysis results" },
+        { "method": "GET", "path": "/code-analysis/{analysis_id}", "description": "Get analysis details" },
+        { "method": "POST", "path": "/code-analysis/trigger", "description": "Trigger code analysis" },
+        { "method": "GET", "path": "/metrics/dora", "description": "Get DORA metrics" },
+        { "method": "GET", "path": "/metrics/quality", "description": "Get quality metrics" }
+      ]
+    },
+
+    "network": {
+      "prefix": "/api/v1/network",
+      "endpoints": [
+        { "method": "GET", "path": "/devices", "description": "List network devices" },
+        { "method": "POST", "path": "/devices", "description": "Add device" },
+        { "method": "GET", "path": "/devices/{device_id}", "description": "Get device details" },
+        { "method": "PUT", "path": "/devices/{device_id}", "description": "Update device" },
+        { "method": "DELETE", "path": "/devices/{device_id}", "description": "Remove device" },
+        { "method": "GET", "path": "/devices/{device_id}/interfaces", "description": "Get device interfaces" },
+        { "method": "GET", "path": "/devices/{device_id}/metrics", "description": "Get device metrics" },
+        { "method": "GET", "path": "/topology", "description": "Get network topology" },
+        { "method": "GET", "path": "/predictions", "description": "List network predictions" },
+        { "method": "GET", "path": "/predictions/{pred_id}", "description": "Get prediction details" },
+        { "method": "GET", "path": "/capacity", "description": "Get capacity forecast" },
+        { "method": "GET", "path": "/sdwan/policies", "description": "List SD-WAN policies" },
+        { "method": "POST", "path": "/sdwan/policies", "description": "Create policy" },
+        { "method": "PUT", "path": "/sdwan/policies/{policy_id}", "description": "Update policy" },
+        { "method": "POST", "path": "/sdwan/optimize", "description": "Trigger AI optimization" },
+        { "method": "GET", "path": "/troubleshoot", "description": "AI-driven troubleshooting" }
+      ]
+    },
+
+    "data_platform": {
+      "prefix": "/api/v1/data",
+      "endpoints": [
+        { "method": "GET", "path": "/sources", "description": "List data sources" },
+        { "method": "POST", "path": "/sources", "description": "Add data source" },
+        { "method": "GET", "path": "/sources/{source_id}", "description": "Get source details" },
+        { "method": "PUT", "path": "/sources/{source_id}", "description": "Update source" },
+        { "method": "DELETE", "path": "/sources/{source_id}", "description": "Remove source" },
+        { "method": "POST", "path": "/sources/{source_id}/sync", "description": "Trigger sync" },
+        { "method": "GET", "path": "/catalog", "description": "Search data catalog" },
+        { "method": "GET", "path": "/catalog/{entry_id}", "description": "Get catalog entry" },
+        { "method": "GET", "path": "/catalog/{entry_id}/lineage", "description": "Get data lineage" },
+        { "method": "GET", "path": "/quality/rules", "description": "List quality rules" },
+        { "method": "POST", "path": "/quality/rules", "description": "Create quality rule" },
+        { "method": "GET", "path": "/quality/results", "description": "Get quality results" },
+        { "method": "GET", "path": "/quality/dashboard", "description": "Get quality dashboard" },
+        { "method": "POST", "path": "/query/natural-language", "description": "Execute natural language query" },
+        { "method": "GET", "path": "/query/history", "description": "Get query history" },
+        { "method": "GET", "path": "/analytics/dashboards", "description": "List dashboards" },
+        { "method": "POST", "path": "/analytics/dashboards", "description": "Create dashboard" }
+      ]
+    },
+
+    "ml_models": {
+      "prefix": "/api/v1/ml",
+      "endpoints": [
+        { "method": "GET", "path": "/models", "description": "List ML models" },
+        { "method": "GET", "path": "/models/{model_id}", "description": "Get model details" },
+        { "method": "GET", "path": "/models/{model_id}/versions", "description": "List model versions" },
+        { "method": "GET", "path": "/models/{model_id}/performance", "description": "Get model performance" },
+        { "method": "POST", "path": "/models/{model_id}/retrain", "description": "Trigger retraining" },
+        { "method": "GET", "path": "/models/{model_id}/drift", "description": "Get drift metrics" },
+        { "method": "GET", "path": "/predictions/log", "description": "Get prediction logs" },
+        { "method": "POST", "path": "/predictions/feedback", "description": "Submit prediction feedback" },
+        { "method": "GET", "path": "/governance/decisions", "description": "List AI decisions" },
+        { "method": "GET", "path": "/governance/decisions/{decision_id}", "description": "Get decision explanation" },
+        { "method": "GET", "path": "/governance/ethical-reviews", "description": "List ethical reviews" },
+        { "method": "POST", "path": "/governance/ethical-reviews", "description": "Create ethical review" }
+      ]
+    },
+
+    "notifications": {
+      "prefix": "/api/v1/notifications",
+      "endpoints": [
+        { "method": "GET", "path": "/", "description": "List notifications for current user" },
+        { "method": "POST", "path": "/{notification_id}/read", "description": "Mark as read" },
+        { "method": "POST", "path": "/read-all", "description": "Mark all as read" },
+        { "method": "GET", "path": "/channels", "description": "List notification channels" },
+        { "method": "POST", "path": "/channels", "description": "Create channel" },
+        { "method": "PUT", "path": "/channels/{channel_id}", "description": "Update channel" },
+        { "method": "DELETE", "path": "/channels/{channel_id}", "description": "Delete channel" },
+        { "method": "POST", "path": "/channels/{channel_id}/test", "description": "Test channel" },
+        { "method": "GET", "path": "/rules", "description": "List notification rules" },
+        { "method": "POST", "path": "/rules", "description": "Create rule" },
+        { "method": "PUT", "path": "/rules/{rule_id}", "description": "Update rule" },
+        { "method": "DELETE", "path": "/rules/{rule_id}", "description": "Delete rule" },
+        { "method": "GET", "path": "/on-call", "description": "List on-call schedules" },
+        { "method": "POST", "path": "/on-call", "description": "Create schedule" },
+        { "method": "PUT", "path": "/on-call/{schedule_id}", "description": "Update schedule" },
+        { "method": "GET", "path": "/on-call/current", "description": "Get current on-call" },
+        { "method": "GET", "path": "/escalation-policies", "description": "List escalation policies" },
+        { "method": "POST", "path": "/escalation-policies", "description": "Create policy" },
+        { "method": "PUT", "path": "/escalation-policies/{policy_id}", "description": "Update policy" }
+      ]
+    },
+
+    "integrations": {
+      "prefix": "/api/v1/integrations",
+      "endpoints": [
+        { "method": "GET", "path": "/", "description": "List integrations" },
+        { "method": "GET", "path": "/available", "description": "List available integration types" },
+        { "method": "POST", "path": "/", "description": "Create integration" },
+        { "method": "GET", "path": "/{integration_id}", "description": "Get integration details" },
+        { "method": "PUT", "path": "/{integration_id}", "description": "Update integration" },
+        { "method": "DELETE", "path": "/{integration_id}", "description": "Delete integration" },
+        { "method": "POST", "path": "/{integration_id}/test", "description": "Test integration" },
+        { "method": "POST", "path": "/{integration_id}/sync", "description": "Trigger sync" },
+        { "method": "GET", "path": "/webhooks", "description": "List webhooks" },
+        { "method": "POST", "path": "/webhooks", "description": "Create webhook" },
+        { "method": "PUT", "path": "/webhooks/{webhook_id}", "description": "Update webhook" },
+        { "method": "DELETE", "path": "/webhooks/{webhook_id}", "description": "Delete webhook" },
+        { "method": "GET", "path": "/webhooks/{webhook_id}/deliveries", "description": "List webhook deliveries" }
+      ]
+    },
+
+    "reports": {
+      "prefix": "/api/v1/reports",
+      "endpoints": [
+        { "method": "GET", "path": "/templates", "description": "List report templates" },
+        { "method": "POST", "path": "/generate", "description": "Generate report" },
+        { "method": "GET", "path": "/scheduled", "description": "List scheduled reports" },
+        { "method": "POST", "path": "/scheduled", "description": "Schedule report" },
+        { "method": "PUT", "path": "/scheduled/{schedule_id}", "description": "Update schedule" },
+        { "method": "DELETE", "path": "/scheduled/{schedule_id}", "description": "Delete schedule" },
+        { "method": "GET", "path": "/executive-summary", "description": "Get executive summary" },
+        { "method": "GET", "path": "/sla", "description": "Get SLA report" },
+        { "method": "GET", "path": "/capacity", "description": "Get capacity report" },
+        { "method": "GET", "path": "/cost", "description": "Get cost report" },
+        { "method": "GET", "path": "/security", "description": "Get security report" }
+      ]
+    },
+
+    "websocket": {
+      "prefix": "/ws",
+      "endpoints": [
+        { "path": "/alerts", "description": "Real-time alert stream" },
+        { "path": "/incidents", "description": "Real-time incident updates" },
+        { "path": "/notifications", "description": "User notifications" },
+        { "path": "/metrics", "description": "Live metrics stream" },
+        { "path": "/virtual-agent/{session_id}", "description": "Virtual agent chat" }
+      ]
+    }
+  },
+
+  "frontend_structure": {
+    "src": {
+      "app": {
+        "description": "Main application setup",
+        "files": ["App.tsx", "routes.tsx", "store.ts"]
+      },
+      "components": {
+        "common": {
+          "description": "Shared UI components",
+          "components": [
+            "Button", "Input", "Select", "Modal", "Drawer", "Table", "DataGrid",
+            "Card", "Badge", "Avatar", "Tooltip", "Popover", "Dropdown",
+            "Tabs", "Accordion", "Alert", "Toast", "Skeleton", "Spinner",
+            "Pagination", "Breadcrumb", "SearchInput", "DatePicker", "DateRangePicker",
+            "FileUpload", "RichTextEditor", "CodeEditor", "JsonViewer"
+          ]
+        },
+        "layout": {
+          "description": "Layout components",
+          "components": [
+            "MainLayout", "Sidebar", "Header", "Footer", "PageHeader",
+            "NavigationMenu", "UserMenu", "NotificationBell", "SearchBar",
+            "Breadcrumbs", "MobileNav"
+          ]
+        },
+        "charts": {
+          "description": "Data visualization components",
+          "components": [
+            "LineChart", "AreaChart", "BarChart", "PieChart", "DonutChart",
+            "GaugeChart", "Sparkline", "Heatmap", "TreeMap", "SankeyDiagram",
+            "NetworkGraph", "TimeSeriesChart", "MetricCard", "TrendIndicator"
+          ]
+        },
+        "forms": {
+          "description": "Form components",
+          "components": [
+            "FormField", "FormSection", "FormActions", "DynamicForm",
+            "FilterForm", "SearchForm", "WizardForm", "InlineEditForm"
+          ]
+        }
+      },
+      "features": {
+        "auth": {
+          "description": "Authentication module",
+          "components": ["LoginPage", "RegisterPage", "ForgotPasswordPage", "ResetPasswordPage", "MfaSetup", "SsoCallback"],
+          "hooks": ["useAuth", "usePermissions"],
+          "api": ["authApi"]
+        },
+        "dashboard": {
+          "description": "Main dashboard",
+          "components": [
+            "DashboardPage", "OverviewWidgets", "IncidentSummaryWidget",
+            "AlertsWidget", "PredictionsWidget", "ServiceHealthWidget",
+            "CostSummaryWidget", "SecurityScoreWidget", "TeamActivityWidget",
+            "QuickActions", "RecentActivity", "CustomizableDashboard"
+          ]
+        },
+        "incidents": {
+          "description": "Incident management",
+          "components": [
+            "IncidentListPage", "IncidentDetailPage", "IncidentCreateModal",
+            "IncidentTimeline", "IncidentActions", "IncidentAssignment",
+            "IncidentComments", "RelatedAlerts", "AiAnalysisPanel",
+            "PlaybookExecutionPanel", "IncidentMetrics", "IncidentFilters"
+          ],
+          "hooks": ["useIncidents", "useIncidentDetail"],
+          "api": ["incidentsApi"]
+        },
+        "alerts": {
+          "description": "Alert management",
+          "components": [
+            "AlertListPage", "AlertDetailDrawer", "AlertCorrelationView",
+            "AlertRulesPage", "AlertSourcesPage", "AlertFilters",
+            "AlertTimeline", "CorrelatedAlertsPanel", "AlertActions"
+          ]
+        },
+        "predictions": {
+          "description": "AI predictions",
+          "components": [
+            "PredictionsPage", "PredictionCard", "PredictionDetailModal",
+            "PredictionTimeline", "ModelPerformancePage", "PredictionFeedback"
+          ]
+        },
+        "playbooks": {
+          "description": "Automation playbooks",
+          "components": [
+            "PlaybookListPage", "PlaybookEditor", "PlaybookStepEditor",
+            "PlaybookExecutionHistory", "PlaybookApprovalQueue",
+            "TriggerConditionBuilder", "PlaybookTestRunner"
+          ]
+        },
+        "serviceDesk": {
+          "description": "Service desk module",
+          "tickets": {
+            "components": [
+              "TicketListPage", "TicketDetailPage", "TicketCreatePage",
+              "TicketConversation", "TicketSidebar", "AiSuggestionsPanel",
+              "TicketFilters", "TicketBulkActions", "SlaIndicator"
+            ]
+          },
+          "virtualAgent": {
+            "components": [
+              "VirtualAgentWidget", "ChatInterface", "ConversationHistory",
+              "AgentAnalytics", "TrainingDataManager"
+            ]
+          },
+          "knowledgeBase": {
+            "components": [
+              "ArticleListPage", "ArticleEditor", "ArticleViewer",
+              "SearchResults", "CategoryBrowser", "ArticleAnalytics"
+            ]
+          }
+        },
+        "cloudOptimization": {
+          "description": "Cloud management",
+          "components": [
+            "CloudDashboard", "AccountsPage", "ResourceExplorer",
+            "CostAnalysisPage", "CostBreakdownChart", "CostTrendChart",
+            "CostForecastChart", "AnomalyListPage", "AnomalyDetailModal",
+            "RecommendationsPage", "RecommendationCard",
+            "RightsizingPage", "IdleResourcesPage", "BudgetsPage",
+            "BudgetCreateModal", "BudgetAlertConfig", "MultiCloudComparison"
+          ]
+        },
+        "security": {
+          "description": "Security operations",
+          "components": [
+            "SecurityDashboard", "EventListPage", "EventDetailDrawer",
+            "InvestigationListPage", "InvestigationDetailPage",
+            "InvestigationTimeline", "UserBehaviorPage", "UserProfileCard",
+            "AnomalyTimeline", "ThreatIntelPage", "SecurityPlaybooksPage",
+            "ComplianceDashboard", "RiskScoreGauge"
+          ]
+        },
+        "devops": {
+          "description": "DevOps module",
+          "components": [
+            "DevOpsDashboard", "ApplicationsPage", "ApplicationDetailPage",
+            "DeploymentListPage", "DeploymentDetailPage", "DeploymentTimeline",
+            "RiskAssessmentPanel", "PipelineListPage", "PipelineDetailPage",
+            "CodeAnalysisPage", "DoraMetricsPage", "QualityDashboard"
+          ]
+        },
+        "network": {
+          "description": "Network operations",
+          "components": [
+            "NetworkDashboard", "DeviceListPage", "DeviceDetailPage",
+            "TopologyMap", "InterfaceMetrics", "PredictionsPage",
+            "CapacityForecast", "SdwanPoliciesPage", "PolicyEditor",
+            "TroubleshootingWizard"
+          ]
+        },
+        "dataPlatform": {
+          "description": "Data platform",
+          "components": [
+            "DataSourcesPage", "SourceConfigModal", "DataCatalogPage",
+            "CatalogEntryDetail", "LineageViewer", "QualityDashboard",
+            "QualityRulesPage", "NaturalLanguageQuery", "QueryHistory",
+            "DashboardBuilder"
+          ]
+        },
+        "mlModels": {
+          "description": "ML model management",
+          "components": [
+            "ModelRegistryPage", "ModelDetailPage", "ModelVersionHistory",
+            "PerformanceMetrics", "DriftMonitor", "RetrainingQueue",
+            "PredictionLogs", "GovernanceDashboard", "DecisionExplainer",
+            "EthicalReviewPage"
+          ]
+        },
+        "settings": {
+          "description": "Settings pages",
+          "components": [
+            "SettingsLayout", "GeneralSettings", "UserManagement",
+            "TeamManagement", "IntegrationsPage", "IntegrationConfigModal",
+            "NotificationSettings", "ChannelConfig", "RuleBuilder",
+            "OnCallScheduler", "EscalationPolicyEditor", "WebhooksPage",
+            "ApiKeysPage", "AuditLogPage", "BillingPage"
+          ]
+        },
+        "reports": {
+          "description": "Reports module",
+          "components": [
+            "ReportsPage", "ReportViewer", "ReportScheduler",
+            "ExecutiveSummary", "SlaReport", "CapacityReport",
+            "CostReport", "SecurityReport", "CustomReportBuilder"
+          ]
+        }
+      },
+      "hooks": {
+        "description": "Custom React hooks",
+        "hooks": [
+          "useApi", "useDebounce", "useThrottle", "useLocalStorage",
+          "useWebSocket", "useInfiniteScroll", "useVirtualization",
+          "useClickOutside", "useKeyboardShortcuts", "useMediaQuery",
+          "useDarkMode", "useNotifications", "useFilters", "useSorting",
+          "usePagination", "useFormValidation", "useAsync"
+        ]
+      },
+      "services": {
+        "description": "API and utility services",
+        "files": [
+          "apiClient.ts", "authService.ts", "websocketService.ts",
+          "notificationService.ts", "storageService.ts", "analyticsService.ts"
+        ]
+      },
+      "store": {
+        "description": "Redux store setup",
+        "slices": [
+          "authSlice", "uiSlice", "notificationsSlice", "filtersSlice"
+        ],
+        "api": {
+          "description": "RTK Query API definitions",
+          "files": [
+            "baseApi.ts", "incidentsApi.ts", "alertsApi.ts", "ticketsApi.ts",
+            "cloudApi.ts", "securityApi.ts", "devopsApi.ts", "networkApi.ts",
+            "dataApi.ts", "mlApi.ts", "settingsApi.ts", "reportsApi.ts"
+          ]
+        }
+      },
+      "utils": {
+        "description": "Utility functions",
+        "files": [
+          "formatters.ts", "validators.ts", "dateUtils.ts", "chartUtils.ts",
+          "filterUtils.ts", "exportUtils.ts", "permissionUtils.ts"
+        ]
+      },
+      "types": {
+        "description": "TypeScript type definitions",
+        "files": [
+          "api.types.ts", "models.types.ts", "ui.types.ts", "chart.types.ts"
+        ]
+      },
+      "constants": {
+        "description": "Application constants",
+        "files": [
+          "routes.ts", "permissions.ts", "statusMappings.ts", "chartColors.ts"
+        ]
+      },
+      "styles": {
+        "description": "Global styles and theme",
+        "files": [
+          "theme.ts", "globalStyles.ts", "variables.css"
+        ]
+      }
+    }
+  },
+
+  "backend_structure": {
+    "app": {
+      "main.py": "FastAPI application entry point",
+      "config": {
+        "description": "Configuration management",
+        "files": ["settings.py", "database.py", "redis.py", "logging.py", "security.py"]
+      },
+      "api": {
+        "description": "API routes",
+        "v1": {
+          "endpoints": [
+            "auth.py", "organizations.py", "incidents.py", "alerts.py",
+            "predictions.py", "playbooks.py", "tickets.py", "virtual_agent.py",
+            "knowledge_base.py", "cloud.py", "security.py", "devops.py",
+            "network.py", "data_platform.py", "ml_models.py", "notifications.py",
+            "integrations.py", "reports.py", "webhooks.py"
+          ],
+          "deps.py": "Dependency injection",
+          "router.py": "Router aggregation"
+        }
+      },
+      "core": {
+        "description": "Core functionality",
+        "files": [
+          "security.py", "jwt.py", "permissions.py", "exceptions.py",
+          "middleware.py", "rate_limiter.py", "cache.py"
+        ]
+      },
+      "models": {
+        "description": "SQLAlchemy models",
+        "files": [
+          "base.py", "user.py", "organization.py", "incident.py", "alert.py",
+          "prediction.py", "playbook.py", "ticket.py", "cloud.py", "security.py",
+          "devops.py", "network.py", "data_platform.py", "ml_model.py",
+          "notification.py", "integration.py", "audit.py"
+        ]
+      },
+      "schemas": {
+        "description": "Pydantic schemas",
+        "files": [
+          "base.py", "auth.py", "user.py", "organization.py", "incident.py",
+          "alert.py", "prediction.py", "playbook.py", "ticket.py", "cloud.py",
+          "security.py", "devops.py", "network.py", "data_platform.py",
+          "ml_model.py", "notification.py", "integration.py", "report.py"
+        ]
+      },
+      "services": {
+        "description": "Business logic services",
+        "files": [
+          "auth_service.py", "user_service.py", "organization_service.py",
+          "incident_service.py", "alert_service.py", "correlation_service.py",
+          "prediction_service.py", "playbook_service.py", "remediation_service.py",
+          "ticket_service.py", "virtual_agent_service.py", "knowledge_service.py",
+          "cloud_service.py", "cost_service.py", "optimization_service.py",
+          "security_service.py", "investigation_service.py", "ueba_service.py",
+          "devops_service.py", "deployment_service.py", "code_analysis_service.py",
+          "network_service.py", "sdwan_service.py", "data_service.py",
+          "data_quality_service.py", "catalog_service.py", "nl_query_service.py",
+          "ml_service.py", "model_training_service.py", "drift_detection_service.py",
+          "notification_service.py", "escalation_service.py", "integration_service.py",
+          "report_service.py", "audit_service.py"
+        ]
+      },
+      "ml": {
+        "description": "Machine learning modules",
+        "anomaly_detection": {
+          "files": ["isolation_forest.py", "autoencoder.py", "statistical.py"]
+        },
+        "prediction": {
+          "files": ["incident_predictor.py", "capacity_predictor.py", "cost_predictor.py", "network_predictor.py"]
+        },
+        "nlp": {
+          "files": ["intent_classifier.py", "entity_extractor.py", "sentiment_analyzer.py", "ticket_classifier.py", "nl_to_sql.py"]
+        },
+        "correlation": {
+          "files": ["alert_correlator.py", "root_cause_analyzer.py", "event_clustering.py"]
+        },
+        "recommendation": {
+          "files": ["optimization_recommender.py", "remediation_recommender.py", "routing_recommender.py"]
+        },
+        "behavior": {
+          "files": ["user_behavior_profiler.py", "device_behavior_profiler.py", "anomaly_scorer.py"]
+        },
+        "utils": {
+          "files": ["feature_engineering.py", "model_registry.py", "model_serving.py", "drift_detector.py"]
+        }
+      },
+      "integrations": {
+        "description": "Third-party integrations",
+        "monitoring": {
+          "files": ["prometheus.py", "datadog.py", "newrelic.py", "dynatrace.py", "splunk.py", "elasticsearch.py"]
+        },
+        "cloud": {
+          "files": ["aws.py", "azure.py", "gcp.py"]
+        },
+        "itsm": {
+          "files": ["servicenow.py", "jira.py", "freshservice.py"]
+        },
+        "communication": {
+          "files": ["slack.py", "teams.py", "pagerduty.py", "email.py", "sms.py"]
+        },
+        "security": {
+          "files": ["crowdstrike.py", "sentinelone.py", "okta.py", "azure_ad.py"]
+        },
+        "devops": {
+          "files": ["github.py", "gitlab.py", "jenkins.py", "azure_devops.py"]
+        },
+        "network": {
+          "files": ["cisco.py", "paloalto.py", "fortinet.py"]
+        }
+      },
+      "workers": {
+        "description": "Celery background tasks",
+        "files": [
+          "celery_app.py", "alert_processor.py", "prediction_runner.py",
+          "model_trainer.py", "data_syncer.py", "report_generator.py",
+          "notification_sender.py", "remediation_executor.py", "cleanup_tasks.py"
+        ]
+      },
+      "websocket": {
+        "description": "WebSocket handlers",
+        "files": ["manager.py", "handlers.py", "events.py"]
+      },
+      "utils": {
+        "description": "Utility modules",
+        "files": [
+          "encryption.py", "hashing.py", "datetime_utils.py", "validators.py",
+          "formatters.py", "exporters.py", "importers.py"
+        ]
+      }
+    },
+    "alembic": {
+      "description": "Database migrations",
+      "versions": "Migration files"
+    },
+    "tests": {
+      "description": "Test suite",
+      "unit": "Unit tests",
+      "integration": "Integration tests",
+      "e2e": "End-to-end tests",
+      "fixtures": "Test fixtures",
+      "conftest.py": "Pytest configuration"
+    }
+  },
+
+  "ml_models_specification": {
+    "incident_prediction": {
+      "type": "Classification / Time Series",
+      "algorithm": "Gradient Boosting (XGBoost/LightGBM) + LSTM",
+      "features": [
+        "historical_incident_patterns", "alert_frequency", "system_metrics",
+        "time_features", "change_events", "seasonal_patterns"
+      ],
+      "output": "Probability of incident in next N hours",
+      "training_frequency": "Weekly",
+      "target_accuracy": ">85%"
+    },
+    "alert_correlation": {
+      "type": "Clustering + Graph Analysis",
+      "algorithm": "DBSCAN + Graph Neural Networks",
+      "features": [
+        "alert_timing", "affected_hosts", "alert_types", "message_similarity",
+        "topology_proximity", "causal_relationships"
+      ],
+      "output": "Correlated alert groups with root cause probability",
+      "training_frequency": "Daily",
+      "target_accuracy": ">80%"
+    },
+    "ticket_classification": {
+      "type": "Multi-label Classification",
+      "algorithm": "BERT-based transformer",
+      "features": ["ticket_text", "user_context", "historical_patterns"],
+      "output": "Category, subcategory, priority, suggested assignee",
+      "training_frequency": "Weekly",
+      "target_accuracy": ">90%"
+    },
+    "virtual_agent_nlp": {
+      "type": "Intent Classification + NER",
+      "algorithm": "Fine-tuned transformer (DistilBERT/RoBERTa)",
+      "features": ["user_message", "conversation_context", "user_profile"],
+      "output": "Intent, entities, response generation",
+      "training_frequency": "Continuous learning",
+      "target_accuracy": ">88%"
+    },
+    "cost_anomaly_detection": {
+      "type": "Anomaly Detection",
+      "algorithm": "Isolation Forest + Prophet",
+      "features": [
+        "daily_costs", "resource_usage", "cost_trends", "seasonal_patterns"
+      ],
+      "output": "Anomaly score with explanation",
+      "training_frequency": "Daily",
+      "target_precision": ">90%"
+    },
+    "rightsizing_recommendation": {
+      "type": "Regression + Optimization",
+      "algorithm": "Random Forest + Linear Programming",
+      "features": [
+        "cpu_utilization", "memory_utilization", "network_io", "storage_io",
+        "instance_costs", "workload_patterns"
+      ],
+      "output": "Recommended instance type with savings estimate",
+      "training_frequency": "Weekly",
+      "target_accuracy": ">85%"
+    },
+    "user_behavior_analytics": {
+      "type": "Anomaly Detection",
+      "algorithm": "Autoencoder + Isolation Forest",
+      "features": [
+        "login_patterns", "access_patterns", "application_usage",
+        "data_access", "network_behavior"
+      ],
+      "output": "Risk score with anomaly explanation",
+      "training_frequency": "Daily",
+      "target_precision": ">85%"
+    },
+    "deployment_risk_scoring": {
+      "type": "Classification",
+      "algorithm": "Gradient Boosting",
+      "features": [
+        "code_change_size", "files_changed", "test_coverage",
+        "historical_failure_rate", "time_of_day", "deployment_frequency"
+      ],
+      "output": "Risk score (0-1) with contributing factors",
+      "training_frequency": "Weekly",
+      "target_accuracy": ">80%"
+    },
+    "network_capacity_prediction": {
+      "type": "Time Series Forecasting",
+      "algorithm": "Prophet + LSTM",
+      "features": [
+        "bandwidth_utilization", "traffic_patterns", "growth_trends",
+        "seasonal_patterns", "event_indicators"
+      ],
+      "output": "Capacity forecast for next 30/60/90 days",
+      "training_frequency": "Weekly",
+      "target_mape": "<10%"
+    },
+    "natural_language_to_sql": {
+      "type": "Seq2Seq",
+      "algorithm": "T5 or CodeT5",
+      "features": ["natural_language_query", "schema_context", "query_history"],
+      "output": "SQL query",
+      "training_frequency": "Monthly",
+      "target_accuracy": ">85%"
+    }
+  },
+
+  "integrations_supported": {
+    "monitoring": [
+      "Prometheus", "Grafana", "Datadog", "New Relic", "Dynatrace",
+      "Splunk", "Elastic/ELK", "Zabbix", "Nagios", "PRTG"
+    ],
+    "cloud_providers": [
+      "AWS", "Azure", "Google Cloud Platform", "Oracle Cloud"
+    ],
+    "itsm": [
+      "ServiceNow", "Jira Service Management", "Freshservice",
+      "BMC Remedy", "Zendesk"
+    ],
+    "communication": [
+      "Slack", "Microsoft Teams", "PagerDuty", "Opsgenie",
+      "Email (SMTP)", "SMS (Twilio)", "Webhook"
+    ],
+    "security": [
+      "CrowdStrike", "SentinelOne", "Microsoft Defender",
+      "Okta", "Azure AD", "Ping Identity"
+    ],
+    "devops": [
+      "GitHub", "GitLab", "Bitbucket", "Jenkins", "Azure DevOps",
+      "CircleCI", "ArgoCD", "Terraform"
+    ],
+    "network": [
+      "Cisco (Meraki, DNA)", "Palo Alto", "Fortinet",
+      "VMware NSX", "Arista"
+    ],
+    "data": [
+      "Snowflake", "Databricks", "BigQuery", "Redshift",
+      "PostgreSQL", "MySQL", "MongoDB"
+    ]
+  },
+
+  "deployment": {
+    "containerization": {
+      "frontend": {
+        "base_image": "node:20-alpine",
+        "build_steps": [
+          "npm ci",
+          "npm run build",
+          "nginx to serve static files"
+        ],
+        "ports": [80, 443]
+      },
+      "backend": {
+        "base_image": "python:3.11-slim",
+        "build_steps": [
+          "pip install requirements",
+          "uvicorn app.main:app"
+        ],
+        "ports": [8000]
+      },
+      "workers": {
+        "base_image": "python:3.11-slim",
+        "command": "celery -A app.workers.celery_app worker"
+      },
+      "ml_service": {
+        "base_image": "python:3.11-slim with ML libs",
+        "gpu_support": "optional",
+        "model_storage": "S3/GCS/Azure Blob"
+      }
+    },
+    "kubernetes": {
+      "namespaces": ["aiops-prod", "aiops-staging", "aiops-dev"],
+      "components": [
+        "Deployments for each service",
+        "HPA for auto-scaling",
+        "PDB for high availability",
+        "ConfigMaps and Secrets",
+        "Ingress with TLS",
+        "NetworkPolicies",
+        "PersistentVolumeClaims"
+      ],
+      "monitoring": [
+        "Prometheus ServiceMonitors",
+        "Grafana dashboards",
+        "Alert rules"
+      ]
+    },
+    "ci_cd": {
+      "pipeline_stages": [
+        "lint", "test", "security_scan", "build", "push",
+        "deploy_staging", "integration_tests", "deploy_prod"
+      ],
+      "tools": ["GitHub Actions / GitLab CI / Jenkins"]
+    }
+  },
+
+  "security_requirements": {
+    "authentication": [
+      "JWT with refresh tokens",
+      "SAML 2.0 SSO",
+      "OAuth 2.0 / OIDC",
+      "MFA (TOTP, SMS, Email)"
+    ],
+    "authorization": [
+      "Role-Based Access Control (RBAC)",
+      "Attribute-Based Access Control (ABAC)",
+      "Organization-level isolation",
+      "Team-level permissions"
+    ],
+    "data_security": [
+      "Encryption at rest (AES-256)",
+      "Encryption in transit (TLS 1.3)",
+      "Field-level encryption for sensitive data",
+      "Data masking for PII"
+    ],
+    "api_security": [
+      "Rate limiting",
+      "API key management",
+      "Request validation",
+      "CORS configuration"
+    ],
+    "compliance": [
+      "SOC 2 Type II",
+      "GDPR",
+      "HIPAA (if healthcare)",
+      "ISO 27001"
+    ],
+    "audit": [
+      "Comprehensive audit logging",
+      "AI decision audit trails",
+      "User activity tracking",
+      "Data access logging"
+    ]
+  },
+
+  "performance_requirements": {
+    "api_response_times": {
+      "p50": "<100ms",
+      "p95": "<500ms",
+      "p99": "<1000ms"
+    },
+    "throughput": {
+      "alerts_per_second": 1000,
+      "concurrent_users": 10000,
+      "api_requests_per_second": 5000
+    },
+    "availability": {
+      "target": "99.9%",
+      "rto": "15 minutes",
+      "rpo": "5 minutes"
+    },
+    "scalability": {
+      "horizontal_scaling": "All services",
+      "auto_scaling_triggers": ["CPU > 70%", "Memory > 80%", "Request queue > 100"]
+    }
+  },
+
+  "development_phases": {
+    "phase_1": {
+      "name": "Foundation",
+      "duration": "8-10 weeks",
+      "deliverables": [
+        "Core infrastructure setup",
+        "Authentication & authorization",
+        "Organization & user management",
+        "Basic incident management",
+        "Alert ingestion & display",
+        "Basic dashboard"
+      ]
+    },
+    "phase_2": {
+      "name": "Intelligent Operations",
+      "duration": "10-12 weeks",
+      "deliverables": [
+        "Alert correlation engine",
+        "Incident prediction models",
+        "Automated playbooks",
+        "Enhanced dashboards",
+        "Basic service desk"
+      ]
+    },
+    "phase_3": {
+      "name": "Cloud & Cost Management",
+      "duration": "8-10 weeks",
+      "deliverables": [
+        "Multi-cloud integration",
+        "Cost analytics & forecasting",
+        "Anomaly detection",
+        "Optimization recommendations",
+        "Budget management"
+      ]
+    },
+    "phase_4": {
+      "name": "AI Service Desk",
+      "duration": "8-10 weeks",
+      "deliverables": [
+        "Virtual agent with NLP",
+        "Knowledge base with semantic search",
+        "Smart ticket routing",
+        "Agent assist features",
+        "Self-service portal"
+      ]
+    },
+    "phase_5": {
+      "name": "Security & DevOps",
+      "duration": "10-12 weeks",
+      "deliverables": [
+        "Security event correlation",
+        "User behavior analytics",
+        "Investigation workflows",
+        "DevOps integration",
+        "Deployment risk scoring"
+      ]
+    },
+    "phase_6": {
+      "name": "Network & Data Platform",
+      "duration": "8-10 weeks",
+      "deliverables": [
+        "Network monitoring & predictions",
+        "SD-WAN optimization",
+        "Data platform integration",
+        "Natural language queries",
+        "Advanced analytics"
+      ]
+    },
+    "phase_7": {
+      "name": "Polish & Scale",
+      "duration": "6-8 weeks",
+      "deliverables": [
+        "Performance optimization",
+        "Advanced reporting",
+        "Mobile responsiveness",
+        "Documentation",
+        "Training materials"
+      ]
+    }
+  },
+
+  "testing_strategy": {
+    "unit_tests": {
+      "coverage_target": ">80%",
+      "frameworks": {
+        "frontend": "Jest + React Testing Library",
+        "backend": "pytest"
+      }
+    },
+    "integration_tests": {
+      "api_tests": "pytest + httpx",
+      "database_tests": "pytest with test containers"
+    },
+    "e2e_tests": {
+      "framework": "Cypress or Playwright",
+      "coverage": "Critical user journeys"
+    },
+    "performance_tests": {
+      "load_testing": "Locust or k6",
+      "scenarios": ["Normal load", "Peak load", "Stress test"]
+    },
+    "security_tests": {
+      "sast": "SonarQube, Bandit",
+      "dast": "OWASP ZAP",
+      "dependency_scanning": "Snyk, Dependabot"
+    },
+    "ml_model_tests": {
+      "data_validation": "Great Expectations",
+      "model_validation": "Cross-validation, A/B testing",
+      "bias_testing": "Fairlearn, AIF360"
+    }
+  }
+}

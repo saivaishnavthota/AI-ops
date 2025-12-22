@@ -1,0 +1,259 @@
+/* Global styles for AI-Ops Platform */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background-color: #f0f2f5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Ant Design overrides */
+.ant-layout {
+  min-height: 100vh;
+}
+
+.ant-layout-sider {
+  position: fixed !important;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  overflow: auto;
+  height: 100vh;
+}
+
+.ant-layout-content {
+  margin: 24px;
+  padding: 24px;
+  background: #fff;
+  border-radius: 8px;
+  min-height: 280px;
+}
+
+/* Page header */
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+/* Cards */
+.ant-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* Tables */
+.ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ant-table-thead > tr > th {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-open {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.status-acknowledged {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+.status-in_progress {
+  background: #f0f5ff;
+  color: #2f54eb;
+}
+
+.status-resolved {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.status-closed {
+  background: #f5f5f5;
+  color: #8c8c8c;
+}
+
+/* Severity badges */
+.severity-critical {
+  background: #fff1f0;
+  color: #f5222d;
+}
+
+.severity-high {
+  background: #fff2e8;
+  color: #fa541c;
+}
+
+.severity-medium {
+  background: #fffbe6;
+  color: #faad14;
+}
+
+.severity-low {
+  background: #e6fffb;
+  color: #13c2c2;
+}
+
+.severity-info {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+/* Priority badges */
+.priority-p1 {
+  background: #fff1f0;
+  color: #f5222d;
+  font-weight: 600;
+}
+
+.priority-p2 {
+  background: #fff2e8;
+  color: #fa541c;
+}
+
+.priority-p3 {
+  background: #fffbe6;
+  color: #faad14;
+}
+
+.priority-p4 {
+  background: #e6fffb;
+  color: #13c2c2;
+}
+
+.priority-p5 {
+  background: #f5f5f5;
+  color: #8c8c8c;
+}
+
+/* Utility classes */
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.mb-0 {
+  margin-bottom: 0;
+}
+
+.mb-8 {
+  margin-bottom: 8px;
+}
+
+.mb-16 {
+  margin-bottom: 16px;
+}
+
+.mb-24 {
+  margin-bottom: 24px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.mt-24 {
+  margin-top: 24px;
+}
+
+/* Auth pages */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 40px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.auth-logo {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.auth-logo h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1890ff;
+  margin: 0;
+}
+
+.auth-logo p {
+  color: #8c8c8c;
+  margin-top: 8px;
+}
+
+/* Loading spinner */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 48px;
+  color: #8c8c8c;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

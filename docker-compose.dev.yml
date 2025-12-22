@@ -1,0 +1,56 @@
+version: '3.8'
+
+# Development overrides - use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # Frontend with hot reload
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "7026:7026"
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:7027
+    command: npm run dev -- --host 0.0.0.0 --port 7026
+
+  # Backend with hot reload
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "7027:7027"
+    volumes:
+      - ./backend/app:/app/app:ro
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://aiops:aiops_secret@postgres:5432/aiops_db
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=dev-secret-key-not-for-production
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - CORS_ORIGINS=http://localhost:7026,http://127.0.0.1:7026
+    command: uvicorn app.main:app --host 0.0.0.0 --port 7027 --reload
+
+  # PostgreSQL - expose for local tools
+  postgres:
+    ports:
+      - "5432:5432"
+
+  # Redis - expose for local tools
+  redis:
+    ports:
+      - "6379:6379"
+
+  # Disable celery workers in dev (optional - can enable if needed)
+  celery_worker:
+    profiles:
+      - workers
+
+  celery_beat:
+    profiles:
+      - workers
