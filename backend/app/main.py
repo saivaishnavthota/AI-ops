@@ -53,12 +53,33 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# SECURITY: Never use wildcard "*" with allow_credentials=True
+# This combination allows any website to make authenticated requests
+cors_origins = settings.CORS_ORIGINS
+
+# Filter out wildcards - they're not allowed with credentials
+safe_origins = [
+    origin for origin in cors_origins
+    if origin.strip() != "*" and origin.strip()
+]
+
+# Log warning if wildcards were configured (security misconfiguration)
+if len(safe_origins) != len(cors_origins):
+    import logging
+    logging.getLogger(__name__).warning(
+        "SECURITY: Wildcard '*' in CORS_ORIGINS is not allowed with credentials. "
+        "Specify explicit origins instead. Wildcards have been removed."
+    )
+
+# Use only explicit origins with credentials
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=safe_origins if safe_origins else ["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    expose_headers=["X-Total-Count", "X-Page", "X-Page-Size"],
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
 
 

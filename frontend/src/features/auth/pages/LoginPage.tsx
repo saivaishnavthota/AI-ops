@@ -1,10 +1,12 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Form, Input, Button, message, Checkbox } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { useDispatch } from 'react-redux';
 
-import { useLoginMutation, useGetMeQuery } from '../../../store/api/authApi';
-import { useAuth } from '../../../hooks/useAuth';
+import { useLoginMutation } from '../../../store/api/authApi';
+import { authApi } from '../../../store/api/authApi';
+import { setCredentials } from '../../../store/slices/authSlice';
 
 interface LoginFormValues {
   email: string;
@@ -14,43 +16,54 @@ interface LoginFormValues {
 
 const LoginPage: React.FC = () => {
   const [form] = Form.useForm();
-  const { login } = useAuth();
-  const [loginMutation, { isLoading }] = useLoginMutation();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [loginMutation, { isLoading: isLoginLoading }] = useLoginMutation();
+  const [isFetchingUser, setIsFetchingUser] = useState(false);
+
+  const isLoading = isLoginLoading || isFetchingUser;
 
   const onFinish = async (values: LoginFormValues) => {
     try {
-      const response = await loginMutation({
+      // Step 1: Login and get tokens
+      const tokenResponse = await loginMutation({
         email: values.email,
         password: values.password,
         remember_me: values.remember,
       }).unwrap();
 
-      // After successful login, we need to get user info
-      // For simplicity, we'll create a mock user - in production, use getMe query
-      const mockUser = {
-        id: 'temp',
-        organization_id: 'temp',
-        email: values.email,
-        first_name: null,
-        last_name: null,
-        full_name: values.email.split('@')[0],
-        role: 'admin',
-        phone: null,
-        job_title: null,
-        avatar_url: null,
-        is_active: true,
-        is_verified: true,
-        mfa_enabled: false,
-        last_login: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      // Step 2: Temporarily store tokens to make authenticated request
+      localStorage.setItem('accessToken', tokenResponse.access_token);
+      localStorage.setItem('refreshToken', tokenResponse.refresh_token);
 
-      login(mockUser, response);
-      message.success('Login successful!');
+      // Step 3: Fetch actual user data from API
+      setIsFetchingUser(true);
+      try {
+        const userResult = await dispatch(
+          authApi.endpoints.getMe.initiate(undefined, { forceRefetch: true })
+        ).unwrap();
+
+        // Step 4: Store credentials with real user data
+        dispatch(setCredentials({
+          user: userResult,
+          accessToken: tokenResponse.access_token,
+          refreshToken: tokenResponse.refresh_token,
+        }));
+
+        message.success('Login successful!');
+        navigate('/');
+      } catch (userError) {
+        // If we can't fetch user, clear tokens and show error
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        console.error('Failed to fetch user profile:', userError);
+        message.error('Login succeeded but failed to load user profile. Please try again.');
+      } finally {
+        setIsFetchingUser(false);
+      }
     } catch (error: unknown) {
-      const err = error as { data?: { message?: string } };
-      message.error(err.data?.message || 'Login failed. Please try again.');
+      const err = error as { data?: { message?: string; detail?: string } };
+      message.error(err.data?.message || err.data?.detail || 'Login failed. Please try again.');
     }
   };
 

@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import List
+from pydantic import Field, field_validator
+from typing import List, Union
 from functools import lru_cache
 
 
@@ -16,8 +16,12 @@ class Settings(BaseSettings):
     # API
     API_V1_PREFIX: str = "/api/v1"
 
-    # Security
-    SECRET_KEY: str = Field(default="your-super-secret-key-change-in-production")
+    # Security - SECRET_KEY must be set via environment variable
+    # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    SECRET_KEY: str = Field(
+        default=...,  # Required - no default for security
+        description="JWT signing key - must be set via SECRET_KEY environment variable"
+    )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -33,7 +37,16 @@ class Settings(BaseSettings):
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
 
     # CORS
-    CORS_ORIGINS: List[str] = Field(default=["http://localhost:3000", "http://localhost:5173"])
+    CORS_ORIGINS: Union[List[str], str] = Field(default=["http://localhost:3000", "http://localhost:5173"])
+    
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS_ORIGINS from comma-separated string or list."""
+        if isinstance(v, str):
+            # Split by comma and strip whitespace
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     # Email (for password reset)
     SMTP_HOST: str = ""
@@ -52,9 +65,14 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1")
     CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2")
 
-    # AI/ML Settings
-    MISTRAL_API_KEY: str = Field(default="")
-    MISTRAL_MODEL: str = Field(default="mistral-small-latest")
+    # AI/ML Settings (Anthropic Claude)
+    # Supports both API keys (sk-ant-api...) and OAuth tokens (sk-ant-oat...)
+    # IMPORTANT: Set via ANTHROPIC_API_KEY environment variable - never hardcode!
+    ANTHROPIC_API_KEY: str = Field(
+        default="",  # Empty default - AI features disabled if not set
+        description="Anthropic API key - must be set via ANTHROPIC_API_KEY environment variable"
+    )
+    ANTHROPIC_MODEL: str = Field(default="claude-sonnet-4-20250514")
     AI_CLASSIFICATION_ENABLED: bool = True
     AI_SUGGESTION_ENABLED: bool = True
     AI_CORRELATION_ENABLED: bool = True

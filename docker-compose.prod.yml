@@ -1,9 +1,18 @@
 version: '3.8'
 
-# SECURITY NOTES:
-# 1. Copy .env.example to .env and set all required values before running
-# 2. Never use default passwords in production
-# 3. Generate SECRET_KEY with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+# PRODUCTION CONFIGURATION
+# ========================
+# SECURITY REQUIREMENTS:
+# 1. Create .env file with all required values (copy from .env.example)
+# 2. Generate strong SECRET_KEY: python -c "import secrets; print(secrets.token_urlsafe(32))"
+# 3. Set strong POSTGRES_PASSWORD (min 16 chars, mixed case, numbers, symbols)
+# 4. Set ANTHROPIC_API_KEY if AI features are needed
+# 5. Configure CORS_ORIGINS with your actual domain(s) - NEVER use wildcards
+#
+# Before deploying:
+# - Remove database/redis port exposures (commented out below)
+# - Configure SSL/TLS via reverse proxy
+# - Set up proper monitoring and logging
 
 services:
   # Frontend - React Application
@@ -11,10 +20,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: aiops-frontend
+    container_name: aiops-frontend-prod
     restart: unless-stopped
     ports:
-      - "7026:7026"
+      - "6201:7026"
     depends_on:
       - backend
     networks:
@@ -27,10 +36,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: aiops-backend
+    container_name: aiops-backend-prod
     restart: unless-stopped
     ports:
-      - "7027:7027"
+      - "6200:7027"
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,19 +48,19 @@ services:
     networks:
       - aiops-network
     environment:
-      # Database - uses environment variables (set in .env file)
+      # Database - REQUIRED: Set POSTGRES_PASSWORD in .env
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-aiops_db}
       - REDIS_URL=redis://redis:6379/0
-      # Security - SECRET_KEY is required (no default for security)
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required - generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"}
+      # Security - REQUIRED: Set SECRET_KEY in .env
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=15
       - REFRESH_TOKEN_EXPIRE_DAYS=7
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DEBUG=${DEBUG:-false}
-      # CORS - specify explicit origins, never use wildcards
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:7026,http://localhost:3000}
-      # AI/ML - Anthropic API key (optional, AI features disabled if not set)
+      - ENVIRONMENT=production
+      - DEBUG=false
+      # CORS - REQUIRED: Set your actual domain(s), NEVER use wildcards
+      - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS is required - set your domain}
+      # AI/ML - Optional
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
     volumes:
@@ -66,11 +75,11 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: aiops-postgres
+    container_name: aiops-postgres-prod
     restart: unless-stopped
-    # SECURITY: In production, remove port exposure - only internal network access
-    ports:
-      - "5432:5432"
+    # SECURITY: Comment out ports in production - use internal network only
+    # ports:
+    #   - "6204:5432"
     networks:
       - aiops-network
     environment:
@@ -89,10 +98,11 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: aiops-redis
+    container_name: aiops-redis-prod
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # SECURITY: Comment out ports in production - use internal network only
+    # ports:
+    #   - "6203:6379"
     networks:
       - aiops-network
     volumes:
@@ -109,7 +119,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: aiops-celery-worker
+    container_name: aiops-celery-worker-prod
     restart: unless-stopped
     command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
     depends_on:
@@ -133,7 +143,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: aiops-celery-beat
+    container_name: aiops-celery-beat-prod
     restart: unless-stopped
     command: celery -A app.workers.celery_app beat --loglevel=info
     depends_on:

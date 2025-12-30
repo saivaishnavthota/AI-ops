@@ -56,13 +56,23 @@ class WebSocketService {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/v1/ws?token=${encodeURIComponent(token)}`;
+    // SECURITY: Don't send token in URL - it gets logged in browser history and server logs
+    // Instead, send token in first message after connection
+    const wsUrl = `${protocol}//${host}/api/v1/ws`;
 
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
+        // SECURITY: Send authentication token as first message after connection
+        // This keeps the token out of URLs, logs, and browser history
+        if (this.ws && this.token) {
+          this.ws.send(JSON.stringify({
+            action: 'authenticate',
+            data: { token: this.token }
+          }));
+        }
+        console.log('WebSocket connected, authenticating...');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
       };
