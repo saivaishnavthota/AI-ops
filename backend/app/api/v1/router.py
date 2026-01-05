@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     notifications,
     audit_logs,
     websocket,
+    users,
 )
 
 # Create main API router
@@ -34,3 +35,4 @@ api_router.include_router(
     websocket.router,
     tags=["WebSocket"],
 )
+api_router.include_router(users.router)

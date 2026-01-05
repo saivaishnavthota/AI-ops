@@ -18,6 +18,7 @@ interface ListIncidentsParams {
   search?: string;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
+  _refresh?: number; // Cache buster parameter (backend ignores it)
 }
 
 interface CreateIncidentRequest {

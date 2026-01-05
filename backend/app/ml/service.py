@@ -6,6 +6,8 @@ Provides a high-level interface for all AI capabilities:
 - Resolution suggestions
 - Alert correlation
 - Combined analysis
+
+Powered by Anthropic Claude AI.
 """
 
 import logging
@@ -16,7 +18,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from .client import MistralClient
+from .client import AnthropicClient
 from .classifier import IncidentClassifier, ClassificationResult
 from .suggester import ResolutionSuggester, ResolutionSuggestion
 from .correlator import AlertCorrelator, AlertInfo, CorrelationResult
@@ -30,6 +32,7 @@ logger = logging.getLogger(__name__)
 class AIService:
     """
     Unified AI service providing all AI capabilities.
+    Powered by Anthropic Claude AI.
 
     Usage:
         async with AIService(db) as ai:
@@ -39,14 +42,14 @@ class AIService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
-        self._client: Optional[MistralClient] = None
+        self._client: Optional[AnthropicClient] = None
         self.classifier: Optional[IncidentClassifier] = None
         self.suggester: Optional[ResolutionSuggester] = None
         self.correlator: Optional[AlertCorrelator] = None
 
     async def __aenter__(self):
-        if settings.MISTRAL_API_KEY:
-            self._client = MistralClient()
+        if settings.ANTHROPIC_API_KEY:
+            self._client = AnthropicClient()
             await self._client.__aenter__()
             self.classifier = IncidentClassifier(self._client)
             self.suggester = ResolutionSuggester(self._client)
@@ -282,11 +285,12 @@ class AIService:
     async def get_ai_status(self) -> Dict[str, Any]:
         """Get AI service status and configuration."""
         return {
-            "enabled": bool(settings.MISTRAL_API_KEY),
+            "enabled": bool(settings.ANTHROPIC_API_KEY),
+            "provider": "anthropic",
             "classification_enabled": settings.AI_CLASSIFICATION_ENABLED,
             "suggestion_enabled": settings.AI_SUGGESTION_ENABLED,
             "correlation_enabled": settings.AI_CORRELATION_ENABLED,
-            "model": settings.MISTRAL_MODEL,
+            "model": settings.ANTHROPIC_MODEL,
             "confidence_threshold": settings.AI_CONFIDENCE_THRESHOLD,
         }
 

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Table, Tag, Button, Space, Input, Select, Card, Typography, Tooltip, Badge } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Table, Tag, Button, Space, Input, Select, Card, Typography, Tooltip, Badge, Modal, Form, message } from 'antd';
 import {
   PlusOutlined,
   SearchOutlined,
@@ -12,13 +12,14 @@ import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
-import { useListIncidentsQuery } from '../../../store/api/incidentsApi';
+import { useListIncidentsQuery, useCreateIncidentMutation } from '../../../store/api/incidentsApi';
 import type { Incident, IncidentStatus, IncidentPriority, IncidentSeverity } from '../../../types/models.types';
 
 dayjs.extend(relativeTime);
 
 const { Title } = Typography;
 const { Option } = Select;
+const { TextArea } = Input;
 
 const statusColors: Record<IncidentStatus, string> = {
   open: 'orange',
@@ -45,11 +46,32 @@ const severityColors: Record<IncidentSeverity, string> = {
 };
 
 const IncidentListPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [priorityFilter, setPriorityFilter] = useState<string[]>([]);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [form] = Form.useForm();
+
+  // Check if we should open the create modal from query parameter
+  useEffect(() => {
+    const shouldCreate = searchParams.get('create');
+    console.log('IncidentListPage - create parameter:', shouldCreate, 'isCreateModalOpen:', isCreateModalOpen);
+    if (shouldCreate === 'true') {
+      console.log('Opening create modal');
+      // Open modal after a small delay to ensure component is fully mounted
+      const timer = setTimeout(() => {
+        setIsCreateModalOpen(true);
+        // Remove the query parameter from URL
+        const newSearchParams = new URLSearchParams(searchParams);
+        newSearchParams.delete('create');
+        setSearchParams(newSearchParams, { replace: true });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, setSearchParams]);
 
   const { data, isLoading, refetch } = useListIncidentsQuery({
     page,
@@ -60,6 +82,21 @@ const IncidentListPage: React.FC = () => {
     sort_by: 'created_at',
     sort_order: 'desc',
   });
+
+  const [createIncident, { isLoading: isCreating }] = useCreateIncidentMutation();
+
+  const handleCreate = async () => {
+    try {
+      const values = await form.validateFields();
+      await createIncident(values).unwrap();
+      message.success('Incident created successfully');
+      setIsCreateModalOpen(false);
+      form.resetFields();
+      refetch();
+    } catch (error) {
+      message.error('Failed to create incident');
+    }
+  };
 
   const columns: ColumnsType<Incident> = [
     {
@@ -152,7 +189,7 @@ const IncidentListPage: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={2} style={{ margin: 0 }}>Incidents</Title>
-        <Button type="primary" icon={<PlusOutlined />}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalOpen(true)}>
           Create Incident
         </Button>
       </div>
@@ -218,6 +255,89 @@ const IncidentListPage: React.FC = () => {
           scroll={{ x: 1000 }}
         />
       </Card>
+
+      {/* Create Incident Modal */}
+      <Modal
+        title="Create New Incident"
+        open={isCreateModalOpen}
+        onOk={handleCreate}
+        onCancel={() => {
+          setIsCreateModalOpen(false);
+          form.resetFields();
+        }}
+        okText="Create"
+        cancelText="Cancel"
+        confirmLoading={isCreating}
+        width={600}
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="title"
+            label="Title"
+            rules={[{ required: true, message: 'Please enter incident title' }]}
+          >
+            <Input placeholder="Enter incident title" />
+          </Form.Item>
+          <Form.Item
+            name="description"
+            label="Description"
+          >
+            <TextArea rows={4} placeholder="Describe the incident in detail" />
+          </Form.Item>
+          <Form.Item
+            name="priority"
+            label="Priority"
+            rules={[{ required: true, message: 'Please select priority' }]}
+          >
+            <Select placeholder="Select priority">
+              <Option value="p1">P1 - Critical</Option>
+              <Option value="p2">P2 - High</Option>
+              <Option value="p3">P3 - Medium</Option>
+              <Option value="p4">P4 - Low</Option>
+              <Option value="p5">P5 - Planning</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="severity"
+            label="Severity"
+            rules={[{ required: true, message: 'Please select severity' }]}
+          >
+            <Select placeholder="Select severity">
+              <Option value="critical">Critical</Option>
+              <Option value="high">High</Option>
+              <Option value="medium">Medium</Option>
+              <Option value="low">Low</Option>
+              <Option value="info">Info</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="category"
+            label="Category"
+          >
+            <Input placeholder="Enter category (optional)" />
+          </Form.Item>
+          <Form.Item
+            name="affected_services"
+            label="Affected Services"
+          >
+            <Select
+              mode="tags"
+              placeholder="Enter affected services (press Enter to add)"
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+          <Form.Item
+            name="tags"
+            label="Tags"
+          >
+            <Select
+              mode="tags"
+              placeholder="Enter tags (press Enter to add)"
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

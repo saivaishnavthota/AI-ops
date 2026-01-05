@@ -1,5 +1,5 @@
 """
-Incident Classifier using Mistral AI
+Incident Classifier using Anthropic Claude AI
 
 Automatically classifies incidents based on title and description into:
 - Category (infrastructure, application, security, network, database, etc.)
@@ -12,7 +12,7 @@ import logging
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
-from .client import MistralClient
+from .client import AnthropicClient
 from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -88,9 +88,9 @@ Respond with JSON in this exact format:
 
 
 class IncidentClassifier:
-    """AI-powered incident classifier using Mistral."""
+    """AI-powered incident classifier using Anthropic Claude."""
 
-    def __init__(self, client: Optional[MistralClient] = None):
+    def __init__(self, client: Optional[AnthropicClient] = None):
         self.client = client
         self._categories = [
             "infrastructure", "application", "security", "network",
@@ -120,11 +120,11 @@ class IncidentClassifier:
             ClassificationResult with category, priority, severity, etc.
         """
         if not settings.AI_CLASSIFICATION_ENABLED:
-            return self._default_classification()
+            return self._default_classification(title, description)
 
-        if not settings.MISTRAL_API_KEY:
-            logger.warning("Mistral API key not configured, using default classification")
-            return self._default_classification()
+        if not settings.ANTHROPIC_API_KEY:
+            logger.info("Using mock AI classification (no API key configured)")
+            return self._default_classification(title, description)
 
         prompt = CLASSIFICATION_USER_PROMPT.format(
             title=title,
@@ -135,7 +135,7 @@ class IncidentClassifier:
         )
 
         try:
-            client = self.client or MistralClient()
+            client = self.client or AnthropicClient()
             async with client:
                 result = await client.generate_json(
                     prompt=prompt,
@@ -147,8 +147,8 @@ class IncidentClassifier:
             return self._parse_classification(result)
 
         except Exception as e:
-            logger.error(f"AI classification failed: {str(e)}")
-            return self._default_classification()
+            logger.error(f"AI classification failed: {str(e)}, falling back to mock")
+            return self._default_classification(title, description)
 
     def _parse_classification(self, result: Dict[str, Any]) -> ClassificationResult:
         """Parse and validate AI classification response."""
@@ -182,17 +182,186 @@ class IncidentClassifier:
             affected_components=result.get("affected_components", []),
         )
 
-    def _default_classification(self) -> ClassificationResult:
-        """Return default classification when AI is unavailable."""
+    def _default_classification(
+        self,
+        title: str = "",
+        description: str = ""
+    ) -> ClassificationResult:
+        """
+        Return smart mock classification based on keywords when AI is unavailable.
+        This provides realistic demo behavior without requiring an API key.
+        """
+        text = f"{title} {description}".lower()
+
+        # Keyword-based classification rules
+        classification_rules = {
+            "database": {
+                "keywords": ["database", "db", "postgres", "mysql", "mongodb", "redis", "sql",
+                            "query", "replication", "backup", "connection pool", "deadlock",
+                            "slow query", "table lock", "index"],
+                "subcategories": {
+                    "connection": ["connection", "pool", "timeout"],
+                    "performance": ["slow", "query", "performance", "latency"],
+                    "replication": ["replication", "replica", "sync", "lag"],
+                    "backup": ["backup", "restore", "recovery"],
+                },
+                "default_subcategory": "general",
+            },
+            "infrastructure": {
+                "keywords": ["server", "cpu", "memory", "disk", "storage", "vm", "container",
+                            "kubernetes", "k8s", "pod", "node", "cluster", "ec2", "instance",
+                            "host", "hardware", "oom", "out of memory", "swap"],
+                "subcategories": {
+                    "compute": ["cpu", "processor", "compute", "cores"],
+                    "memory": ["memory", "ram", "oom", "heap", "swap"],
+                    "storage": ["disk", "storage", "volume", "space", "iops"],
+                    "container": ["container", "docker", "kubernetes", "k8s", "pod"],
+                },
+                "default_subcategory": "general",
+            },
+            "network": {
+                "keywords": ["network", "dns", "loadbalancer", "lb", "nginx", "haproxy",
+                            "timeout", "latency", "packet", "firewall", "vpc", "subnet",
+                            "routing", "gateway", "proxy", "ssl", "tls", "certificate"],
+                "subcategories": {
+                    "connectivity": ["connection", "timeout", "unreachable", "refused"],
+                    "dns": ["dns", "resolve", "nameserver", "domain"],
+                    "loadbalancer": ["loadbalancer", "lb", "nginx", "haproxy", "balancer"],
+                    "security": ["firewall", "ssl", "tls", "certificate"],
+                },
+                "default_subcategory": "general",
+            },
+            "application": {
+                "keywords": ["api", "error", "500", "503", "exception", "crash", "bug",
+                            "deployment", "release", "service", "endpoint", "request",
+                            "response", "http", "rest", "graphql", "microservice"],
+                "subcategories": {
+                    "error": ["error", "exception", "500", "503", "crash", "failed"],
+                    "performance": ["slow", "latency", "timeout", "performance"],
+                    "deployment": ["deploy", "release", "rollback", "version"],
+                    "availability": ["down", "unavailable", "health", "outage"],
+                },
+                "default_subcategory": "general",
+            },
+            "security": {
+                "keywords": ["security", "unauthorized", "breach", "attack", "vulnerability",
+                            "cve", "exploit", "intrusion", "malware", "suspicious", "login",
+                            "authentication", "permission", "access denied", "forbidden"],
+                "subcategories": {
+                    "access": ["unauthorized", "permission", "forbidden", "access denied"],
+                    "vulnerability": ["vulnerability", "cve", "exploit", "patch"],
+                    "attack": ["attack", "breach", "intrusion", "ddos", "malware"],
+                    "audit": ["audit", "compliance", "policy"],
+                },
+                "default_subcategory": "general",
+            },
+            "monitoring": {
+                "keywords": ["monitoring", "alert", "metric", "prometheus", "grafana",
+                            "datadog", "newrelic", "apm", "logging", "trace", "observability"],
+                "subcategories": {
+                    "alerting": ["alert", "notification", "trigger"],
+                    "metrics": ["metric", "prometheus", "grafana", "dashboard"],
+                    "logging": ["log", "logging", "elk", "splunk"],
+                },
+                "default_subcategory": "general",
+            },
+            "capacity": {
+                "keywords": ["capacity", "scale", "scaling", "quota", "limit", "exhausted",
+                            "threshold", "burst", "traffic", "load", "spike"],
+                "subcategories": {
+                    "scaling": ["scale", "scaling", "autoscale"],
+                    "quota": ["quota", "limit", "exhausted", "exceeded"],
+                    "traffic": ["traffic", "load", "spike", "burst"],
+                },
+                "default_subcategory": "general",
+            },
+        }
+
+        # Severity keywords
+        severity_rules = {
+            "critical": ["critical", "outage", "down", "crash", "breach", "data loss",
+                        "production down", "complete failure", "security breach"],
+            "high": ["high", "major", "severe", "urgent", "degraded", "impacted",
+                    "failing", "error rate", "spike"],
+            "medium": ["medium", "moderate", "elevated", "warning", "increased"],
+            "low": ["low", "minor", "informational", "notice"],
+        }
+
+        # Priority keywords
+        priority_rules = {
+            "p1": ["critical", "outage", "emergency", "production down", "data loss"],
+            "p2": ["high", "major", "urgent", "severely", "significant"],
+            "p3": ["medium", "moderate", "impacting"],
+            "p4": ["low", "minor", "cosmetic"],
+            "p5": ["planning", "enhancement", "feature request"],
+        }
+
+        # Determine category
+        detected_category = "other"
+        max_matches = 0
+        detected_subcategory = "general"
+        detected_keywords = []
+
+        for category, rules in classification_rules.items():
+            matches = sum(1 for kw in rules["keywords"] if kw in text)
+            if matches > max_matches:
+                max_matches = matches
+                detected_category = category
+                detected_keywords = [kw for kw in rules["keywords"] if kw in text][:5]
+
+                # Determine subcategory
+                for subcat, subcat_kws in rules.get("subcategories", {}).items():
+                    if any(kw in text for kw in subcat_kws):
+                        detected_subcategory = subcat
+                        break
+                else:
+                    detected_subcategory = rules.get("default_subcategory", "general")
+
+        # Determine severity
+        detected_severity = "medium"
+        for severity, keywords in severity_rules.items():
+            if any(kw in text for kw in keywords):
+                detected_severity = severity
+                break
+
+        # Determine priority
+        detected_priority = "p3"
+        for priority, keywords in priority_rules.items():
+            if any(kw in text for kw in keywords):
+                detected_priority = priority
+                break
+
+        # Adjust priority based on severity
+        if detected_severity == "critical" and detected_priority not in ["p1"]:
+            detected_priority = "p1"
+        elif detected_severity == "high" and detected_priority not in ["p1", "p2"]:
+            detected_priority = "p2"
+
+        # Extract affected components from text
+        component_patterns = [
+            "api", "database", "server", "service", "cache", "queue",
+            "loadbalancer", "gateway", "cluster", "node", "pod"
+        ]
+        affected_components = [c for c in component_patterns if c in text][:3]
+
+        # Calculate confidence based on matches
+        confidence = min(0.95, 0.70 + (max_matches * 0.05)) if max_matches > 0 else 0.50
+
+        # Generate reasoning
+        if max_matches > 0:
+            reasoning = f"Mock AI classified as {detected_category}/{detected_subcategory} based on keywords: {', '.join(detected_keywords[:3])}"
+        else:
+            reasoning = "Mock AI classification - no specific keywords detected, using defaults"
+
         return ClassificationResult(
-            category="other",
-            subcategory="unclassified",
-            suggested_priority="p3",
-            suggested_severity="medium",
-            confidence=0.0,
-            reasoning="Default classification - AI unavailable",
-            keywords=[],
-            affected_components=[],
+            category=detected_category,
+            subcategory=detected_subcategory,
+            suggested_priority=detected_priority,
+            suggested_severity=detected_severity,
+            confidence=confidence,
+            reasoning=reasoning,
+            keywords=detected_keywords,
+            affected_components=affected_components,
         )
 
     def to_dict(self, result: ClassificationResult) -> Dict[str, Any]:

@@ -26,6 +26,10 @@ import KnowledgeBasePage from './features/servicedesk/pages/KnowledgeBasePage';
 import PredictionsPage from './features/predictions/pages/PredictionsPage';
 import AnalyticsDashboard from './features/analytics/pages/AnalyticsDashboard';
 import AuditLogPage from './features/settings/pages/AuditLogPage';
+import UsersPage from './features/users/pages/UsersPage';
+
+// Role-based access control
+import { RoleGuard, AdminOnly, OperatorAndAbove } from './components/auth/RoleGuard';
 
 // Protected route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -105,33 +109,90 @@ const App: React.FC = () => {
         {/* Alerts */}
         <Route path="alerts" element={<AlertListPage />} />
 
-        {/* Operations */}
-        <Route path="playbooks" element={<PlaybooksPage />} />
-        <Route path="predictions" element={<PredictionsPage />} />
+        {/* Operations - Operator and above */}
+        <Route path="playbooks" element={
+          <OperatorAndAbove>
+            <PlaybooksPage />
+          </OperatorAndAbove>
+        } />
+        <Route path="predictions" element={
+          <OperatorAndAbove>
+            <PredictionsPage />
+          </OperatorAndAbove>
+        } />
 
-        {/* Analytics */}
+        {/* Analytics - All users */}
         <Route path="analytics" element={<AnalyticsDashboard />} />
 
-        {/* Service Desk */}
-        <Route path="tickets" element={<TicketsPage />} />
-        <Route path="knowledge-base" element={<KnowledgeBasePage />} />
+        {/* Service Desk - Operator and above */}
+        <Route path="tickets" element={
+          <OperatorAndAbove>
+            <TicketsPage />
+          </OperatorAndAbove>
+        } />
+        <Route path="knowledge-base" element={
+          <OperatorAndAbove>
+            <KnowledgeBasePage />
+          </OperatorAndAbove>
+        } />
 
-        {/* Cloud */}
-        <Route path="cloud/resources" element={<CloudResourcesPage />} />
-        <Route path="cloud/costs" element={<CloudCostsPage />} />
-        <Route path="cloud/optimization" element={<CloudOptimizationPage />} />
+        {/* Cloud - Admin only */}
+        <Route path="cloud/resources" element={
+          <AdminOnly>
+            <CloudResourcesPage />
+          </AdminOnly>
+        } />
+        <Route path="cloud/costs" element={
+          <AdminOnly>
+            <CloudCostsPage />
+          </AdminOnly>
+        } />
+        <Route path="cloud/optimization" element={
+          <AdminOnly>
+            <CloudOptimizationPage />
+          </AdminOnly>
+        } />
 
-        {/* Security */}
-        <Route path="security/events" element={<SecurityEventsPage />} />
-        <Route path="security/investigations" element={<SecurityInvestigationsPage />} />
+        {/* Security - Admin only */}
+        <Route path="security/events" element={
+          <AdminOnly>
+            <SecurityEventsPage />
+          </AdminOnly>
+        } />
+        <Route path="security/investigations" element={
+          <AdminOnly>
+            <SecurityInvestigationsPage />
+          </AdminOnly>
+        } />
 
         {/* Organization */}
-        <Route path="integrations" element={<IntegrationsPage />} />
-        <Route path="teams" element={<TeamsPage />} />
-        <Route path="settings/*" element={<SettingsPage />} />
+        <Route path="integrations" element={
+          <AdminOnly>
+            <IntegrationsPage />
+          </AdminOnly>
+        } />
+        <Route path="teams" element={
+          <OperatorAndAbove>
+            <TeamsPage />
+          </OperatorAndAbove>
+        } />
 
-        {/* Audit */}
-        <Route path="audit-log" element={<AuditLogPage />} />
+        {/* Admin only routes */}
+        <Route path="users" element={
+          <AdminOnly>
+            <UsersPage />
+          </AdminOnly>
+        } />
+        <Route path="settings/*" element={
+          <AdminOnly>
+            <SettingsPage />
+          </AdminOnly>
+        } />
+        <Route path="audit-log" element={
+          <AdminOnly>
+            <AuditLogPage />
+          </AdminOnly>
+        } />
       </Route>
 
       {/* Catch all - redirect to dashboard */}

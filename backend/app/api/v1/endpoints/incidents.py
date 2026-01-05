@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 
 from app.api.v1.deps import CurrentUser, CurrentOrganization, DBSession
 from app.services.incident_service import IncidentService
+from app.models.incident import Incident
 from app.schemas.incident import (
     IncidentCreate,
     IncidentUpdate,
@@ -22,6 +23,18 @@ from app.schemas.base import MessageResponse
 from app.core.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
+
+
+def _incident_to_response(incident: Incident) -> IncidentResponse:
+    """Convert Incident model to IncidentResponse, mapping extra_data to metadata."""
+    incident_dict = {
+        **{k: v for k, v in incident.__dict__.items() if not k.startswith("_")},
+        "metadata": incident.extra_data if incident.extra_data else {},
+    }
+    # Remove extra_data and SQLAlchemy internal attributes
+    incident_dict.pop("extra_data", None)
+    incident_dict.pop("_sa_instance_state", None)
+    return IncidentResponse.model_validate(incident_dict)
 
 
 @router.get("", response_model=IncidentListResponse)
@@ -57,7 +70,7 @@ async def list_incidents(
     )
 
     return IncidentListResponse(
-        items=[IncidentResponse.model_validate(i) for i in incidents],
+        items=[_incident_to_response(i) for i in incidents],
         total=total,
         page=page,
         page_size=page_size,
@@ -79,7 +92,7 @@ async def create_incident(
         data=data,
         reported_by_id=current_user.id,
     )
-    return IncidentResponse.model_validate(incident)
+    return _incident_to_response(incident)
 
 
 @router.get("/statistics", response_model=IncidentStatistics)
@@ -111,7 +124,15 @@ async def get_incident(
     comments = await service.get_comments(incident_id, current_org.id)
     timeline = await service.get_timeline(incident_id, current_org.id)
 
-    response = IncidentDetailResponse.model_validate(incident)
+    # Convert incident to response format
+    incident_dict = {
+        **{k: v for k, v in incident.__dict__.items() if not k.startswith("_")},
+        "metadata": incident.extra_data if incident.extra_data else {},
+    }
+    incident_dict.pop("extra_data", None)
+    incident_dict.pop("_sa_instance_state", None)
+    
+    response = IncidentDetailResponse.model_validate(incident_dict)
     response.comments = [IncidentCommentResponse.model_validate(c) for c in comments]
     response.timeline = [IncidentTimelineResponse.model_validate(t) for t in timeline]
 
@@ -135,7 +156,7 @@ async def update_incident(
             data=data,
             user_id=current_user.id,
         )
-        return IncidentResponse.model_validate(incident)
+        return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -155,7 +176,7 @@ async def acknowledge_incident(
             organization_id=current_org.id,
             user_id=current_user.id,
         )
-        return IncidentResponse.model_validate(incident)
+        return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -180,7 +201,7 @@ async def resolve_incident(
             resolution_notes=data.resolution_notes,
             root_cause=data.root_cause,
         )
-        return IncidentResponse.model_validate(incident)
+        return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -202,7 +223,7 @@ async def close_incident(
             organization_id=current_org.id,
             user_id=current_user.id,
         )
-        return IncidentResponse.model_validate(incident)
+        return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -227,7 +248,7 @@ async def assign_incident(
             assigned_team_id=data.assigned_team_id,
             assigned_user_id=data.assigned_user_id,
         )
-        return IncidentResponse.model_validate(incident)
+        return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

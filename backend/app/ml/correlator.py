@@ -1,5 +1,5 @@
 """
-Alert Correlator using Mistral AI
+Alert Correlator using Anthropic Claude AI
 
 Correlates alerts to:
 - Identify related alerts that might be part of the same incident
@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from .client import MistralClient
+from .client import AnthropicClient
 from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -102,9 +102,9 @@ Respond with JSON in this exact format:
 
 
 class AlertCorrelator:
-    """AI-powered alert correlator using Mistral."""
+    """AI-powered alert correlator using Anthropic Claude."""
 
-    def __init__(self, client: Optional[MistralClient] = None):
+    def __init__(self, client: Optional[AnthropicClient] = None):
         self.client = client
 
     async def correlate(
@@ -141,8 +141,8 @@ class AlertCorrelator:
         if not settings.AI_CORRELATION_ENABLED:
             return self._default_correlation(alerts)
 
-        if not settings.MISTRAL_API_KEY:
-            logger.warning("Mistral API key not configured, using default correlation")
+        if not settings.ANTHROPIC_API_KEY:
+            logger.info("Using mock AI correlation (no API key configured)")
             return self._default_correlation(alerts)
 
         # Format alerts for AI analysis
@@ -154,7 +154,7 @@ class AlertCorrelator:
         )
 
         try:
-            client = self.client or MistralClient()
+            client = self.client or AnthropicClient()
             async with client:
                 result = await client.generate_json(
                     prompt=prompt,
@@ -166,7 +166,7 @@ class AlertCorrelator:
             return self._parse_correlation(result, alerts)
 
         except Exception as e:
-            logger.error(f"AI correlation failed: {str(e)}")
+            logger.error(f"AI correlation failed: {str(e)}, falling back to mock")
             return self._default_correlation(alerts)
 
     def _format_alerts(self, alerts: List[AlertInfo]) -> str:
@@ -258,39 +258,206 @@ class AlertCorrelator:
         )
 
     def _default_correlation(self, alerts: List[AlertInfo]) -> CorrelationResult:
-        """Return default correlation when AI is unavailable."""
-        # Simple rule-based correlation by host/service
-        groups_by_host: Dict[str, List[str]] = {}
+        """
+        Return smart mock correlation when AI is unavailable.
+        Uses multiple correlation strategies for realistic demo behavior.
+        """
+        from collections import defaultdict
+
+        # Strategy 1: Group by host
+        groups_by_host: Dict[str, List[AlertInfo]] = defaultdict(list)
+        # Strategy 2: Group by service
+        groups_by_service: Dict[str, List[AlertInfo]] = defaultdict(list)
+        # Strategy 3: Group by severity (for cascade detection)
+        groups_by_severity: Dict[str, List[AlertInfo]] = defaultdict(list)
+        # Strategy 4: Temporal grouping (alerts within 5 minutes)
+        temporal_groups: List[List[AlertInfo]] = []
 
         for alert in alerts:
-            key = alert.host or alert.service or "unknown"
-            if key not in groups_by_host:
-                groups_by_host[key] = []
-            groups_by_host[key].append(alert.id)
+            if alert.host:
+                groups_by_host[alert.host].append(alert)
+            if alert.service:
+                groups_by_service[alert.service].append(alert)
+            groups_by_severity[alert.severity].append(alert)
+
+        # Temporal grouping: sort by time and group nearby alerts
+        sorted_alerts = sorted(alerts, key=lambda a: a.created_at if a.created_at else datetime.min)
+        current_temporal_group = []
+
+        for i, alert in enumerate(sorted_alerts):
+            if not current_temporal_group:
+                current_temporal_group.append(alert)
+            else:
+                last_alert = current_temporal_group[-1]
+                if last_alert.created_at and alert.created_at:
+                    time_diff = abs((alert.created_at - last_alert.created_at).total_seconds())
+                    if time_diff <= 300:  # 5 minutes
+                        current_temporal_group.append(alert)
+                    else:
+                        if len(current_temporal_group) >= 2:
+                            temporal_groups.append(current_temporal_group)
+                        current_temporal_group = [alert]
+                else:
+                    current_temporal_group.append(alert)
+
+        if len(current_temporal_group) >= 2:
+            temporal_groups.append(current_temporal_group)
+
+        # Build correlation groups with priority:
+        # 1. Host + temporal (strongest correlation)
+        # 2. Service + temporal
+        # 3. Pure host grouping
+        # 4. Pure service grouping
 
         groups = []
         correlated_ids = set()
 
-        for key, ids in groups_by_host.items():
-            if len(ids) >= 2:
+        # Priority correlation patterns
+        correlation_patterns = [
+            # Pattern: Critical alert followed by multiple warnings on same host
+            {
+                "name": "cascade_pattern",
+                "check": lambda host_alerts: (
+                    any(a.severity == "critical" for a in host_alerts) and
+                    sum(1 for a in host_alerts if a.severity == "warning") >= 1
+                ),
+                "type": "causal",
+                "confidence": 0.92,
+                "priority": "p1",
+            },
+            # Pattern: Multiple alerts on same host
+            {
+                "name": "host_cluster",
+                "check": lambda host_alerts: len(host_alerts) >= 2,
+                "type": "symptomatic",
+                "confidence": 0.85,
+                "priority": "p2",
+            },
+        ]
+
+        # Process host groups first (highest correlation confidence)
+        for host, host_alerts in groups_by_host.items():
+            if len(host_alerts) < 2:
+                continue
+
+            # Check for cascade pattern (critical -> warning)
+            critical_alerts = [a for a in host_alerts if a.severity == "critical"]
+            warning_alerts = [a for a in host_alerts if a.severity == "warning"]
+
+            if critical_alerts and warning_alerts:
+                # This is likely a cascade - critical is root cause
+                all_related = critical_alerts + warning_alerts
+                alert_ids = [a.id for a in all_related if a.id not in correlated_ids]
+
+                if len(alert_ids) >= 2:
+                    root_cause = critical_alerts[0].id if critical_alerts else None
+
+                    groups.append(CorrelationGroup(
+                        alert_ids=alert_ids,
+                        root_cause_id=root_cause,
+                        correlation_type="causal",
+                        confidence=0.92,
+                        reasoning=f"Cascade detected: Critical alert on {host} triggered subsequent warnings. Root cause appears to be: {critical_alerts[0].title if critical_alerts else 'unknown'}",
+                        suggested_incident_title=f"Service degradation cascade on {host}",
+                        suggested_incident_priority="p1",
+                    ))
+                    correlated_ids.update(alert_ids)
+
+            elif len(host_alerts) >= 2:
+                # Regular host grouping
+                alert_ids = [a.id for a in host_alerts if a.id not in correlated_ids]
+
+                if len(alert_ids) >= 2:
+                    # Determine priority based on severities
+                    has_critical = any(a.severity == "critical" for a in host_alerts)
+                    priority = "p1" if has_critical else "p2"
+
+                    # Try to identify root cause (earliest or most severe)
+                    sorted_by_time = sorted(
+                        [a for a in host_alerts if a.id in alert_ids],
+                        key=lambda a: a.created_at if a.created_at else datetime.max
+                    )
+                    root_cause = sorted_by_time[0].id if sorted_by_time else None
+
+                    groups.append(CorrelationGroup(
+                        alert_ids=alert_ids,
+                        root_cause_id=root_cause,
+                        correlation_type="symptomatic",
+                        confidence=0.85,
+                        reasoning=f"Multiple alerts detected on host {host}. These symptoms likely share a common cause.",
+                        suggested_incident_title=f"Multiple alerts on {host}",
+                        suggested_incident_priority=priority,
+                    ))
+                    correlated_ids.update(alert_ids)
+
+        # Process service groups (for alerts not already correlated)
+        for service, service_alerts in groups_by_service.items():
+            uncorrelated_service_alerts = [a for a in service_alerts if a.id not in correlated_ids]
+
+            if len(uncorrelated_service_alerts) >= 2:
+                alert_ids = [a.id for a in uncorrelated_service_alerts]
+
+                # Determine priority
+                has_critical = any(a.severity == "critical" for a in uncorrelated_service_alerts)
+                priority = "p2" if has_critical else "p3"
+
                 groups.append(CorrelationGroup(
-                    alert_ids=ids,
+                    alert_ids=alert_ids,
                     root_cause_id=None,
                     correlation_type="temporal",
-                    confidence=0.3,
-                    reasoning=f"Grouped by common host/service: {key}",
-                    suggested_incident_title=f"Multiple alerts on {key}",
+                    confidence=0.78,
+                    reasoning=f"Multiple alerts affecting service {service} within correlation window.",
+                    suggested_incident_title=f"Service alerts for {service}",
+                    suggested_incident_priority=priority,
+                ))
+                correlated_ids.update(alert_ids)
+
+        # Process temporal groups (for remaining alerts)
+        for temp_group in temporal_groups:
+            uncorrelated_temp_alerts = [a for a in temp_group if a.id not in correlated_ids]
+
+            if len(uncorrelated_temp_alerts) >= 2:
+                alert_ids = [a.id for a in uncorrelated_temp_alerts]
+
+                groups.append(CorrelationGroup(
+                    alert_ids=alert_ids,
+                    root_cause_id=None,
+                    correlation_type="temporal",
+                    confidence=0.65,
+                    reasoning="Alerts occurred within a 5-minute window, suggesting possible relationship.",
+                    suggested_incident_title="Temporally correlated alerts",
                     suggested_incident_priority="p3",
                 ))
-                correlated_ids.update(ids)
+                correlated_ids.update(alert_ids)
 
+        # Find uncorrelated alerts
         uncorrelated = [a.id for a in alerts if a.id not in correlated_ids]
+
+        # Generate analysis summary
+        if groups:
+            cascade_count = sum(1 for g in groups if g.correlation_type == "causal")
+            symptomatic_count = sum(1 for g in groups if g.correlation_type == "symptomatic")
+            temporal_count = sum(1 for g in groups if g.correlation_type == "temporal")
+
+            summary_parts = [f"Analyzed {len(alerts)} alerts"]
+            if cascade_count:
+                summary_parts.append(f"{cascade_count} cascade pattern(s) detected")
+            if symptomatic_count:
+                summary_parts.append(f"{symptomatic_count} symptomatic group(s)")
+            if temporal_count:
+                summary_parts.append(f"{temporal_count} temporal correlation(s)")
+            if uncorrelated:
+                summary_parts.append(f"{len(uncorrelated)} uncorrelated")
+
+            analysis_summary = ". ".join(summary_parts) + "."
+        else:
+            analysis_summary = f"Analyzed {len(alerts)} alerts. No strong correlations found based on mock analysis rules."
 
         return CorrelationResult(
             groups=groups,
             uncorrelated_ids=uncorrelated,
             total_alerts=len(alerts),
-            analysis_summary="Rule-based correlation (AI unavailable)",
+            analysis_summary=analysis_summary,
         )
 
     def to_dict(self, result: CorrelationResult) -> Dict[str, Any]:

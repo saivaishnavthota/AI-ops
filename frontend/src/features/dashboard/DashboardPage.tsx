@@ -1,5 +1,7 @@
-import React from 'react';
-import { Row, Col, Card, Statistic, Table, Tag, Space, Progress, Typography } from 'antd';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { Row, Col, Card, Statistic, Table, Tag, Space, Progress, Typography, Button } from 'antd';
 import {
   WarningOutlined,
   AlertOutlined,
@@ -7,99 +9,122 @@ import {
   ClockCircleOutlined,
   ArrowUpOutlined,
   ArrowDownOutlined,
+  PlusOutlined,
+  PlayCircleOutlined,
+  FileTextOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
-import { useGetIncidentStatisticsQuery } from '../../store/api/incidentsApi';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import { useDispatch } from 'react-redux';
+import { useGetIncidentStatisticsQuery, useListIncidentsQuery, incidentsApi } from '../../store/api/incidentsApi';
 import { useGetAlertStatisticsQuery } from '../../store/api/alertsApi';
+import type { AppDispatch } from '../../app/store';
+import type { Incident, IncidentStatus, IncidentPriority } from '../../types/models.types';
+
+dayjs.extend(relativeTime);
 
 const { Title } = Typography;
 
-const DashboardPage: React.FC = () => {
-  const { data: incidentStats, isLoading: loadingIncidents } = useGetIncidentStatisticsQuery();
-  const { data: alertStats, isLoading: loadingAlerts } = useGetAlertStatisticsQuery();
+const statusColors: Record<IncidentStatus, string> = {
+  open: 'orange',
+  acknowledged: 'blue',
+  in_progress: 'purple',
+  resolved: 'green',
+  closed: 'default',
+};
 
-  // Recent incidents mock data for demo
-  const recentIncidents = [
+const priorityColors: Record<IncidentPriority, string> = {
+  p1: 'red',
+  p2: 'orange',
+  p3: 'gold',
+  p4: 'cyan',
+  p5: 'default',
+};
+
+const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
+  const dispatch = useDispatch<AppDispatch>();
+  
+  const { data: incidentStats, isLoading: loadingIncidents, refetch: refetchStats } = useGetIncidentStatisticsQuery();
+  const { data: alertStats, isLoading: loadingAlerts } = useGetAlertStatisticsQuery();
+  
+  // State to force fresh fetch on every mount
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  
+  // Fetch recent incidents from API - always fetch fresh with cache busting
+  const { data: incidentsData, isLoading: loadingRecentIncidents, refetch: refetchIncidents } = useListIncidentsQuery(
     {
-      key: '1',
-      number: 'INC-000042',
-      title: 'Database connection timeout',
-      status: 'open',
-      priority: 'p1',
-      created: '10 mins ago',
+      page: 1,
+      page_size: 5,
+      sort_by: 'created_at',
+      sort_order: 'desc',
+      _refresh: refreshKey, // Cache buster parameter (backend will ignore it)
     },
     {
-      key: '2',
-      number: 'INC-000041',
-      title: 'API latency spike',
-      status: 'acknowledged',
-      priority: 'p2',
-      created: '25 mins ago',
-    },
-    {
-      key: '3',
-      number: 'INC-000040',
-      title: 'Memory usage warning',
-      status: 'in_progress',
-      priority: 'p3',
-      created: '1 hour ago',
-    },
-    {
-      key: '4',
-      number: 'INC-000039',
-      title: 'Certificate expiration warning',
-      status: 'resolved',
-      priority: 'p4',
-      created: '2 hours ago',
-    },
-  ];
+      refetchOnMountOrArgChange: true,
+      refetchOnFocus: true,
+      refetchOnReconnect: true,
+    }
+  );
+
+  // Force clear cache and refetch on mount
+  useEffect(() => {
+    // Clear all cached data
+    dispatch(incidentsApi.util.invalidateTags([{ type: 'Incident', id: 'LIST' }]));
+    dispatch(incidentsApi.util.invalidateTags([{ type: 'Incident' }]));
+    
+    // Force a new refresh key to trigger fresh fetch
+    setRefreshKey(Date.now());
+    
+    // Immediately refetch
+    refetchIncidents();
+    refetchStats();
+  }, []); // Only run once on mount
 
   const columns = [
     {
       title: 'Number',
-      dataIndex: 'number',
-      key: 'number',
-      render: (text: string) => <a>{text}</a>,
+      dataIndex: 'incident_number',
+      key: 'incident_number',
+      render: (text: string, record: Incident) => (
+        <Link to={`/incidents/${record.id}`}>
+          <strong>{text}</strong>
+        </Link>
+      ),
     },
     {
       title: 'Title',
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
+      render: (title: string, record: Incident) => (
+        <Link to={`/incidents/${record.id}`}>{title}</Link>
+      ),
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => {
-        const colors: Record<string, string> = {
-          open: 'orange',
-          acknowledged: 'blue',
-          in_progress: 'purple',
-          resolved: 'green',
-          closed: 'default',
-        };
-        return <Tag color={colors[status]}>{status.replace('_', ' ').toUpperCase()}</Tag>;
-      },
+      render: (status: IncidentStatus) => (
+        <Tag color={statusColors[status]}>
+          {status.replace('_', ' ').toUpperCase()}
+        </Tag>
+      ),
     },
     {
       title: 'Priority',
       dataIndex: 'priority',
       key: 'priority',
-      render: (priority: string) => {
-        const colors: Record<string, string> = {
-          p1: 'red',
-          p2: 'orange',
-          p3: 'yellow',
-          p4: 'cyan',
-          p5: 'default',
-        };
-        return <Tag color={colors[priority]}>{priority.toUpperCase()}</Tag>;
-      },
+      render: (priority: IncidentPriority) => (
+        <Tag color={priorityColors[priority]}>{priority.toUpperCase()}</Tag>
+      ),
     },
     {
       title: 'Created',
-      dataIndex: 'created',
-      key: 'created',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => dayjs(date).fromNow(),
     },
   ];
 
@@ -159,13 +184,45 @@ const DashboardPage: React.FC = () => {
       {/* Charts and Tables Row */}
       <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
-          <Card title="Recent Incidents" extra={<a href="/incidents">View All</a>}>
+          <Card 
+            title="Recent Incidents" 
+            extra={
+              <Space>
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<ReloadOutlined />} 
+                  onClick={() => {
+                    // Clear cache
+                    dispatch(incidentsApi.util.invalidateTags([{ type: 'Incident', id: 'LIST' }]));
+                    dispatch(incidentsApi.util.invalidateTags([{ type: 'Incident' }]));
+                    // Force new refresh key to trigger fresh fetch
+                    setRefreshKey(Date.now());
+                    // Refetch
+                    refetchIncidents();
+                    refetchStats();
+                  }}
+                >
+                  Refresh
+                </Button>
+                <Link to="/incidents">View All</Link>
+              </Space>
+            }
+          >
             <Table
               columns={columns}
-              dataSource={recentIncidents}
+              dataSource={
+                !loadingRecentIncidents && incidentsData?.items && Array.isArray(incidentsData.items) && incidentsData.items.length > 0
+                  ? incidentsData.items
+                  : []
+              }
+              rowKey="id"
               pagination={false}
               size="small"
-              loading={loadingIncidents}
+              loading={loadingRecentIncidents}
+              locale={{
+                emptyText: 'No incidents found'
+              }}
             />
           </Card>
         </Col>
@@ -212,11 +269,96 @@ const DashboardPage: React.FC = () => {
           </Card>
 
           <Card title="Quick Actions" style={{ marginTop: 24 }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <a>Create new incident</a>
-              <a>View all alerts</a>
-              <a>Run playbook</a>
-              <a>Generate report</a>
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Button
+                type="link"
+                icon={<PlusOutlined />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  console.log('Create new incident clicked');
+                  navigate('/incidents?create=true', { replace: false });
+                }}
+                style={{ 
+                  padding: '4px 0', 
+                  height: 'auto', 
+                  textAlign: 'left', 
+                  justifyContent: 'flex-start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  color: '#1890ff',
+                  cursor: 'pointer'
+                }}
+                block
+              >
+                Create new incident
+              </Button>
+              <Button
+                type="text"
+                icon={<AlertOutlined />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navigate('/alerts');
+                }}
+                style={{ 
+                  padding: '4px 0', 
+                  height: 'auto', 
+                  textAlign: 'left', 
+                  justifyContent: 'flex-start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  color: '#1890ff'
+                }}
+                block
+              >
+                View all alerts
+              </Button>
+              <Button
+                type="text"
+                icon={<PlayCircleOutlined />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navigate('/playbooks');
+                }}
+                style={{ 
+                  padding: '4px 0', 
+                  height: 'auto', 
+                  textAlign: 'left', 
+                  justifyContent: 'flex-start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  color: '#1890ff'
+                }}
+                block
+              >
+                Run playbook
+              </Button>
+              <Button
+                type="text"
+                icon={<FileTextOutlined />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navigate('/analytics');
+                }}
+                style={{ 
+                  padding: '4px 0', 
+                  height: 'auto', 
+                  textAlign: 'left', 
+                  justifyContent: 'flex-start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  color: '#1890ff'
+                }}
+                block
+              >
+                Generate report
+              </Button>
             </Space>
           </Card>
         </Col>

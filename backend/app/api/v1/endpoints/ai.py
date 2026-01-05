@@ -283,10 +283,11 @@ async def classify_text(
     Useful for previewing classification before creating an incident.
     """
     from app.ml.classifier import IncidentClassifier
+    from app.ml.client import AnthropicClient
 
-    classifier = IncidentClassifier()
-
-    async with classifier.client or classifier:
+    client = AnthropicClient()
+    async with client:
+        classifier = IncidentClassifier(client)
         result = await classifier.classify(
             title=request.title,
             description=request.description,
@@ -309,10 +310,11 @@ async def suggest_text(
     Useful for getting AI suggestions before creating an incident.
     """
     from app.ml.suggester import ResolutionSuggester
+    from app.ml.client import AnthropicClient
 
-    suggester = ResolutionSuggester()
-
-    async with suggester.client or suggester:
+    client = AnthropicClient()
+    async with client:
+        suggester = ResolutionSuggester(client)
         result = await suggester.suggest(
             title=request.title,
             description=request.description,
