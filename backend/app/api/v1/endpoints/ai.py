@@ -257,18 +257,20 @@ async def correlate_alerts(
     db: DBSession,
 ):
     """
-    Correlate alerts using AI.
+    Correlate alerts (AI processing removed - returns empty correlation).
 
-    Analyzes recent alerts to find related groups and identify root causes.
+    Returns empty correlation data. AI correlation has been disabled.
     """
-    async with AIService(db) as ai:
-        correlation = await ai.correlate_alerts(
-            organization_id=current_org.id,
-            time_window_minutes=request.time_window_minutes,
-            status_filter=request.status_filter,
-        )
-
-    return CorrelationResponse(**correlation)
+    return CorrelationResponse(
+        organization_id=str(current_org.id),
+        correlation={
+            "groups": [],
+            "uncorrelated_ids": [],
+            "total_alerts": 0,
+            "analysis_summary": "AI correlation disabled"
+        },
+        time_window_minutes=request.time_window_minutes
+    )
 
 
 @router.post("/classify", response_model=dict)
@@ -381,18 +383,12 @@ async def correlate_alerts_async(
     db: DBSession,
 ):
     """
-    Queue alert correlation for async processing.
+    Queue alert correlation (AI processing removed - returns mock response).
 
-    Returns immediately and processes in background via Celery.
+    AI correlation has been disabled. Returns immediate mock response.
     """
-    from app.workers.tasks.alerts import correlate_alerts as correlate_task
-    task = correlate_task.delay(
-        str(current_org.id),
-        request.time_window_minutes,
-    )
-
     return {
-        "message": "Correlation queued",
+        "message": "AI correlation disabled",
         "organization_id": str(current_org.id),
-        "task_id": task.id,
+        "task_id": "disabled",
     }

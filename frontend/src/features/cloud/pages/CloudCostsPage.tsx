@@ -1,103 +1,26 @@
 import React, { useState } from 'react';
-import { Card, Table, Typography, Statistic, Row, Col, Tag, Progress, Button, Modal, Drawer, Space, DatePicker, Select, message } from 'antd';
+import { Card, Table, Typography, Statistic, Row, Col, Tag, Progress, Button, Modal, Drawer, Space, DatePicker, Select, message, Spin } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined, DownloadOutlined, EyeOutlined, FilterOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { useListCloudCostsQuery, type CloudCostItem } from '../../../store/api/cloudApi';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 
-interface CostItem {
-  id: string;
-  service: string;
-  category: string;
-  currentMonth: number;
-  lastMonth: number;
-  change: number;
-  budget: number;
-  details?: CostDetail[];
-}
-
-interface CostDetail {
-  resource: string;
-  cost: number;
-  usage: string;
-}
-
-const initialCosts: CostItem[] = [
-  {
-    id: '1',
-    service: 'EC2 Instances',
-    category: 'Compute',
-    currentMonth: 2450.00,
-    lastMonth: 2380.00,
-    change: 2.9,
-    budget: 3000,
-    details: [
-      { resource: 'prod-api-server-1', cost: 850, usage: '720 hours' },
-      { resource: 'prod-api-server-2', cost: 850, usage: '720 hours' },
-      { resource: 'staging-api-server', cost: 350, usage: '400 hours' },
-      { resource: 'dev-server', cost: 400, usage: '500 hours' },
-    ]
-  },
-  {
-    id: '2',
-    service: 'RDS Databases',
-    category: 'Database',
-    currentMonth: 1850.00,
-    lastMonth: 1750.00,
-    change: 5.7,
-    budget: 2000,
-    details: [
-      { resource: 'prod-db-primary', cost: 1200, usage: '720 hours' },
-      { resource: 'prod-db-replica', cost: 650, usage: '720 hours' },
-    ]
-  },
-  {
-    id: '3',
-    service: 'S3 Storage',
-    category: 'Storage',
-    currentMonth: 450.00,
-    lastMonth: 420.00,
-    change: 7.1,
-    budget: 500,
-    details: [
-      { resource: 'prod-assets', cost: 200, usage: '500 GB' },
-      { resource: 'prod-backups', cost: 150, usage: '300 GB' },
-      { resource: 'prod-logs', cost: 100, usage: '200 GB' },
-    ]
-  },
-  {
-    id: '4',
-    service: 'CloudFront CDN',
-    category: 'Network',
-    currentMonth: 320.00,
-    lastMonth: 380.00,
-    change: -15.8,
-    budget: 400,
-    details: [
-      { resource: 'cdn-distribution', cost: 320, usage: '2.5 TB transfer' },
-    ]
-  },
-  { id: '5', service: 'EKS Cluster', category: 'Compute', currentMonth: 890.00, lastMonth: 850.00, change: 4.7, budget: 1000 },
-  { id: '6', service: 'ElastiCache', category: 'Database', currentMonth: 280.00, lastMonth: 280.00, change: 0, budget: 300 },
-  { id: '7', service: 'Lambda Functions', category: 'Compute', currentMonth: 125.00, lastMonth: 110.00, change: 13.6, budget: 200 },
-  { id: '8', service: 'CloudWatch', category: 'Monitoring', currentMonth: 85.00, lastMonth: 80.00, change: 6.3, budget: 100 },
-];
-
 const CloudCostsPage: React.FC = () => {
-  const [costs] = useState<CostItem[]>(initialCosts);
+  const { data: costs, isLoading } = useListCloudCostsQuery();
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [selectedCost, setSelectedCost] = useState<CostItem | null>(null);
+  const [selectedCost, setSelectedCost] = useState<CloudCostItem | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const totalCurrent = costs.reduce((sum, c) => sum + c.currentMonth, 0);
-  const totalLast = costs.reduce((sum, c) => sum + c.lastMonth, 0);
-  const totalBudget = costs.reduce((sum, c) => sum + c.budget, 0);
-  const overallChange = ((totalCurrent - totalLast) / totalLast) * 100;
+  const totalCurrent = costs?.reduce((sum, c) => sum + c.currentMonth, 0) || 0;
+  const totalLast = costs?.reduce((sum, c) => sum + c.lastMonth, 0) || 0;
+  const totalBudget = costs?.reduce((sum, c) => sum + c.budget, 0) || 0;
+  const overallChange = totalLast > 0 ? ((totalCurrent - totalLast) / totalLast) * 100 : 0;
 
-  const handleViewDetails = (cost: CostItem) => {
+  const handleViewDetails = (cost: CloudCostItem) => {
     setSelectedCost(cost);
     setIsDetailDrawerOpen(true);
   };
@@ -113,7 +36,7 @@ const CloudCostsPage: React.FC = () => {
     }, 2000);
   };
 
-  const columns: ColumnsType<CostItem> = [
+  const columns: ColumnsType<CloudCostItem> = [
     {
       title: 'Service',
       dataIndex: 'service',
@@ -183,6 +106,10 @@ const CloudCostsPage: React.FC = () => {
       ),
     },
   ];
+
+  if (isLoading) {
+    return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
+  }
 
   return (
     <div>

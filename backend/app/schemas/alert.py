@@ -10,25 +10,29 @@ class AlertBase(BaseModel):
     """Base alert schema."""
 
     title: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = None
     message: Optional[str] = None
     severity: Optional[str] = Field(None, max_length=20)
     host: Optional[str] = Field(None, max_length=255)
     service: Optional[str] = Field(None, max_length=255)
+    environment: Optional[str] = Field(None, max_length=100)
 
 
 class AlertCreate(AlertBase):
     """Alert creation schema (for webhook ingestion)."""
 
     alert_id_external: Optional[str] = None
+    external_id: Optional[str] = None
     source: str = Field(..., max_length=100)
     source_type: Optional[str] = Field(None, max_length=50)
     title: str = Field(..., max_length=500)
-    severity: str = Field(default="warning", max_length=20)
+    severity: str = Field(default="medium", max_length=20)
     metric_name: Optional[str] = None
     metric_value: Optional[float] = None
     threshold_value: Optional[float] = None
     tags: Optional[Dict[str, Any]] = None
     raw_payload: Optional[Dict[str, Any]] = None
+    raw_data: Optional[Dict[str, Any]] = None
 
 
 class AlertUpdate(AlertBase):
@@ -67,14 +71,17 @@ class AlertResponse(BaseSchema):
     id: UUID
     organization_id: UUID
     alert_id_external: Optional[str]
+    external_id: Optional[str]
     source: str
     source_type: Optional[str]
     title: Optional[str]
+    description: Optional[str]
     message: Optional[str]
     severity: str
     status: str
     host: Optional[str]
     service: Optional[str]
+    environment: Optional[str]
     metric_name: Optional[str]
     metric_value: Optional[float]
     threshold_value: Optional[float]
@@ -86,7 +93,9 @@ class AlertResponse(BaseSchema):
     ai_correlation_score: Optional[float]
     fingerprint: Optional[str]
     occurrence_count: int
+    first_occurrence: Optional[datetime]
     first_occurrence_at: Optional[datetime]
+    last_occurrence: Optional[datetime]
     last_occurrence_at: Optional[datetime]
     acknowledged_at: Optional[datetime]
     resolved_at: Optional[datetime]
@@ -98,6 +107,7 @@ class AlertDetailResponse(AlertResponse):
     """Alert detail response with raw payload."""
 
     raw_payload: Optional[Dict[str, Any]]
+    raw_data: Optional[Dict[str, Any]]
     acknowledged_by_name: Optional[str] = None
 
 
@@ -105,6 +115,24 @@ class AlertListResponse(PaginatedResponse[AlertResponse]):
     """Paginated alert list response."""
 
     pass
+
+
+class AlertCorrelationResponse(BaseSchema):
+    """Alert correlation response."""
+
+    id: UUID
+    organization_id: UUID
+    correlation_group_id: Optional[UUID]
+    alert_id: UUID
+    related_alert_id: UUID
+    correlation_type: Optional[str]
+    confidence_score: Optional[float]
+    correlation_reason: Optional[str]
+    is_root_cause: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class AlertCorrelationGroupResponse(BaseSchema):
@@ -116,6 +144,22 @@ class AlertCorrelationGroupResponse(BaseSchema):
     root_cause_alert_id: Optional[UUID]
     alerts: List[AlertResponse]
     created_at: datetime
+
+
+class AlertStatsResponse(BaseModel):
+    """Alert statistics response."""
+
+    total_alerts: int
+    open_alerts: int
+    critical_alerts: int
+    alerts_today: int
+    alerts_this_week: int
+    suppressed_alerts: int
+    converted_to_incidents: int
+    deduplicated_alerts: int
+    correlated_alerts: int
+    by_severity: Optional[Dict[str, int]] = None
+    by_status: Optional[Dict[str, int]] = None
 
 
 class AlertSourceBase(BaseModel):
@@ -157,14 +201,35 @@ class AlertSourceResponse(BaseSchema):
     webhook_url: Optional[str] = None
 
 
-class AlertStatistics(BaseSchema):
-    """Alert statistics response."""
+# Import enhancement schemas
+from .alert_enhancement import (
+    AlertWebhookEndpointCreate,
+    AlertWebhookEndpointResponse,
+    AlertWebhookResponse,
+    AlertSuppressionRuleCreate,
+    AlertSuppressionRuleUpdate,
+    AlertSuppressionRuleResponse,
+    AlertCorrelationRuleCreate,
+    AlertCorrelationRuleUpdate,
+    AlertCorrelationRuleResponse,
+    AlertDeduplicationResponse,
+    AlertToIncidentConversionResponse,
+)
 
-    total: int
-    firing: int
-    acknowledged: int
-    resolved: int
-    suppressed: int
-    by_severity: Dict[str, int]
-    by_source: Dict[str, int]
-    by_service: Dict[str, int]
+__all__ = [
+    "AlertBase",
+    "AlertCreate",
+    "AlertUpdate",
+    "AlertResponse",
+    "AlertDetailResponse",
+    "AlertListResponse",
+    "AlertCorrelationResponse",
+    "AlertStatsResponse",
+    "AlertWebhookEndpointCreate",
+    "AlertWebhookEndpointResponse",
+    "AlertWebhookResponse",
+    "AlertSuppressionRuleCreate",
+    "AlertSuppressionRuleResponse",
+    "AlertCorrelationRuleCreate",
+    "AlertCorrelationRuleResponse",
+]

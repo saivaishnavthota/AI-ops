@@ -4,9 +4,9 @@ import { Form, Input, Button, message, Checkbox } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useDispatch } from 'react-redux';
 
-import { useLoginMutation } from '../../../store/api/authApi';
-import { authApi } from '../../../store/api/authApi';
+import { useLoginMutation, authApi } from '../../../store/api/authApi';
 import { setCredentials } from '../../../store/slices/authSlice';
+import type { AppDispatch } from '../../../app/store';
 
 interface LoginFormValues {
   email: string;
@@ -16,52 +16,42 @@ interface LoginFormValues {
 
 const LoginPage: React.FC = () => {
   const [form] = Form.useForm();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const [loginMutation, { isLoading: isLoginLoading }] = useLoginMutation();
-  const [isFetchingUser, setIsFetchingUser] = useState(false);
-
-  const isLoading = isLoginLoading || isFetchingUser;
+  const [loginMutation, { isLoading }] = useLoginMutation();
 
   const onFinish = async (values: LoginFormValues) => {
     try {
-      // Step 1: Login and get tokens
+      // Login and get tokens
       const tokenResponse = await loginMutation({
         email: values.email,
         password: values.password,
         remember_me: values.remember,
       }).unwrap();
 
-      // Step 2: Temporarily store tokens to make authenticated request
+      // Store tokens temporarily
       localStorage.setItem('accessToken', tokenResponse.access_token);
       localStorage.setItem('refreshToken', tokenResponse.refresh_token);
 
-      // Step 3: Fetch actual user data from API
-      setIsFetchingUser(true);
-      try {
-        const userResult = await dispatch(
-          authApi.endpoints.getMe.initiate(undefined, { forceRefetch: true })
-        ).unwrap();
+      // Fetch user data
+      const userResponse = await dispatch(
+        authApi.endpoints.getMe.initiate()
+      ).unwrap();
 
-        // Step 4: Store credentials with real user data
-        dispatch(setCredentials({
-          user: userResult,
-          accessToken: tokenResponse.access_token,
-          refreshToken: tokenResponse.refresh_token,
-        }));
+      // Update Redux store with user and tokens
+      dispatch(setCredentials({
+        user: userResponse,
+        accessToken: tokenResponse.access_token,
+        refreshToken: tokenResponse.refresh_token,
+      }));
 
-        message.success('Login successful!');
-        navigate('/');
-      } catch (userError) {
-        // If we can't fetch user, clear tokens and show error
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        console.error('Failed to fetch user profile:', userError);
-        message.error('Login succeeded but failed to load user profile. Please try again.');
-      } finally {
-        setIsFetchingUser(false);
-      }
+      message.success('Login successful!');
+      navigate('/');
     } catch (error: unknown) {
+      // Clear tokens on error
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+
       const err = error as { data?: { message?: string; detail?: string } };
       message.error(err.data?.message || err.data?.detail || 'Login failed. Please try again.');
     }

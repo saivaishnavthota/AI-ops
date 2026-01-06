@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Spin } from 'antd';
 
 import { useAuth } from './hooks/useAuth';
+import AppInitializer from './components/AppInitializer';
 import MainLayout from './components/layout/MainLayout';
 import LoginPage from './features/auth/pages/LoginPage';
 import RegisterPage from './features/auth/pages/RegisterPage';
@@ -71,133 +72,135 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const App: React.FC = () => {
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route
-        path="/login"
-        element={
-          <PublicRoute>
-            <LoginPage />
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          <PublicRoute>
-            <RegisterPage />
-          </PublicRoute>
-        }
-      />
+    <AppInitializer>
+      <Routes>
+        {/* Public routes */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <RegisterPage />
+            </PublicRoute>
+          }
+        />
 
-      {/* Protected routes */}
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }
-      >
-        {/* Dashboard */}
-        <Route index element={<DashboardPage />} />
+        {/* Protected routes */}
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <MainLayout />
+            </ProtectedRoute>
+          }
+        >
+          {/* Dashboard */}
+          <Route index element={<DashboardPage />} />
 
-        {/* Incidents */}
-        <Route path="incidents" element={<IncidentListPage />} />
-        <Route path="incidents/:id" element={<IncidentDetailPage />} />
+          {/* Incidents */}
+          <Route path="incidents" element={<IncidentListPage />} />
+          <Route path="incidents/:id" element={<IncidentDetailPage />} />
 
-        {/* Alerts */}
-        <Route path="alerts" element={<AlertListPage />} />
+          {/* Alerts */}
+          <Route path="alerts" element={<AlertListPage />} />
 
-        {/* Operations - Operator and above */}
-        <Route path="playbooks" element={
-          <OperatorAndAbove>
-            <PlaybooksPage />
-          </OperatorAndAbove>
-        } />
-        <Route path="predictions" element={
-          <OperatorAndAbove>
-            <PredictionsPage />
-          </OperatorAndAbove>
-        } />
+          {/* Operations - Operator and above */}
+          <Route path="playbooks" element={
+            <OperatorAndAbove>
+              <PlaybooksPage />
+            </OperatorAndAbove>
+          } />
+          <Route path="predictions" element={
+            <OperatorAndAbove>
+              <PredictionsPage />
+            </OperatorAndAbove>
+          } />
 
-        {/* Analytics - All users */}
-        <Route path="analytics" element={<AnalyticsDashboard />} />
+          {/* Analytics - All users */}
+          <Route path="analytics" element={<AnalyticsDashboard />} />
 
-        {/* Service Desk - Operator and above */}
-        <Route path="tickets" element={
-          <OperatorAndAbove>
-            <TicketsPage />
-          </OperatorAndAbove>
-        } />
-        <Route path="knowledge-base" element={
-          <OperatorAndAbove>
-            <KnowledgeBasePage />
-          </OperatorAndAbove>
-        } />
+          {/* Service Desk - Operator and above */}
+          <Route path="tickets" element={
+            <OperatorAndAbove>
+              <TicketsPage />
+            </OperatorAndAbove>
+          } />
+          <Route path="knowledge-base" element={
+            <OperatorAndAbove>
+              <KnowledgeBasePage />
+            </OperatorAndAbove>
+          } />
 
-        {/* Cloud - Admin only */}
-        <Route path="cloud/resources" element={
-          <AdminOnly>
-            <CloudResourcesPage />
-          </AdminOnly>
-        } />
-        <Route path="cloud/costs" element={
-          <AdminOnly>
-            <CloudCostsPage />
-          </AdminOnly>
-        } />
-        <Route path="cloud/optimization" element={
-          <AdminOnly>
-            <CloudOptimizationPage />
-          </AdminOnly>
-        } />
+          {/* Cloud - Admin only */}
+          <Route path="cloud/resources" element={
+            <AdminOnly>
+              <CloudResourcesPage />
+            </AdminOnly>
+          } />
+          <Route path="cloud/costs" element={
+            <AdminOnly>
+              <CloudCostsPage />
+            </AdminOnly>
+          } />
+          <Route path="cloud/optimization" element={
+            <AdminOnly>
+              <CloudOptimizationPage />
+            </AdminOnly>
+          } />
 
-        {/* Security - Admin only */}
-        <Route path="security/events" element={
-          <AdminOnly>
-            <SecurityEventsPage />
-          </AdminOnly>
-        } />
-        <Route path="security/investigations" element={
-          <AdminOnly>
-            <SecurityInvestigationsPage />
-          </AdminOnly>
-        } />
+          {/* Security - Admin only */}
+          <Route path="security/events" element={
+            <AdminOnly>
+              <SecurityEventsPage />
+            </AdminOnly>
+          } />
+          <Route path="security/investigations" element={
+            <AdminOnly>
+              <SecurityInvestigationsPage />
+            </AdminOnly>
+          } />
 
-        {/* Organization */}
-        <Route path="integrations" element={
-          <AdminOnly>
-            <IntegrationsPage />
-          </AdminOnly>
-        } />
-        <Route path="teams" element={
-          <OperatorAndAbove>
-            <TeamsPage />
-          </OperatorAndAbove>
-        } />
+          {/* Organization */}
+          <Route path="integrations" element={
+            <AdminOnly>
+              <IntegrationsPage />
+            </AdminOnly>
+          } />
+          <Route path="teams" element={
+            <OperatorAndAbove>
+              <TeamsPage />
+            </OperatorAndAbove>
+          } />
 
-        {/* Admin only routes */}
-        <Route path="users" element={
-          <AdminOnly>
-            <UsersPage />
-          </AdminOnly>
-        } />
-        <Route path="settings/*" element={
-          <AdminOnly>
-            <SettingsPage />
-          </AdminOnly>
-        } />
-        <Route path="audit-log" element={
-          <AdminOnly>
-            <AuditLogPage />
-          </AdminOnly>
-        } />
-      </Route>
+          {/* Admin only routes */}
+          <Route path="users" element={
+            <AdminOnly>
+              <UsersPage />
+            </AdminOnly>
+          } />
+          <Route path="settings/*" element={
+            <AdminOnly>
+              <SettingsPage />
+            </AdminOnly>
+          } />
+          <Route path="audit-log" element={
+            <AdminOnly>
+              <AuditLogPage />
+            </AdminOnly>
+          } />
+        </Route>
 
-      {/* Catch all - redirect to dashboard */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Catch all - redirect to dashboard */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppInitializer>
   );
 };
 

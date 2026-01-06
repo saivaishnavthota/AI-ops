@@ -10,12 +10,15 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "7026:7026"
+    networks:
+      - aiops-network
     volumes:
       - ./frontend/src:/app/src:ro
       - ./frontend/public:/app/public:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=http://localhost:7027
+      - VITE_API_URL=http://localhost:7027/api/v1
     command: npm run dev -- --host 0.0.0.0 --port 7026
 
   # Backend with hot reload
@@ -25,10 +28,12 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "7027:7027"
+    networks:
+      - aiops-network
     volumes:
       - ./backend/app:/app/app:ro
     environment:
-      - DATABASE_URL=postgresql+asyncpg://aiops:aiops_secret@postgres:5432/aiops_db
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aiops_db}
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=dev-secret-key-not-for-production
       - ENVIRONMENT=development

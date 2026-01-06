@@ -1,200 +1,14 @@
 import React, { useState } from 'react';
-import { Card, Table, Tag, Typography, Space, Input, Select, DatePicker, Button, Drawer, Descriptions, Timeline, Avatar, Row, Col, Statistic } from 'antd';
+import { Card, Table, Tag, Typography, Space, Input, Select, Button, Drawer, Descriptions, Timeline, Avatar, Row, Col, Statistic } from 'antd';
 import { SearchOutlined, UserOutlined, EyeOutlined, DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import {
+  useGetAuditLogsQuery,
+  useGetAuditLogStatsQuery,
+  AuditLogEntry,
+} from '../../../store/api/auditLogsApi';
 
 const { Title, Text, Paragraph } = Typography;
-const { RangePicker } = DatePicker;
-
-interface AuditLogEntry {
-  id: string;
-  action: string;
-  resource_type: string;
-  resource_id: string;
-  resource_name: string;
-  user_id: string;
-  user_name: string;
-  user_email: string;
-  description: string;
-  changes?: Record<string, { old: unknown; new: unknown }>;
-  ip_address: string;
-  user_agent: string;
-  status: 'success' | 'failed';
-  error_message?: string;
-  created_at: string;
-}
-
-const mockAuditLogs: AuditLogEntry[] = [
-  {
-    id: '1',
-    action: 'incident.created',
-    resource_type: 'incident',
-    resource_id: 'INC-2025-001',
-    resource_name: 'Database Connection Failure',
-    user_id: '1',
-    user_name: 'Alex Chen',
-    user_email: 'alex.chen@example.com',
-    description: 'Created new incident: Database Connection Failure',
-    ip_address: '192.168.1.100',
-    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    status: 'success',
-    created_at: '2025-12-22T10:30:00Z',
-  },
-  {
-    id: '2',
-    action: 'incident.assigned',
-    resource_type: 'incident',
-    resource_id: 'INC-2025-001',
-    resource_name: 'Database Connection Failure',
-    user_id: '2',
-    user_name: 'Sarah Johnson',
-    user_email: 'sarah.johnson@example.com',
-    description: 'Assigned incident to Mike Wilson',
-    changes: {
-      assigned_user_id: { old: null, new: 'Mike Wilson' },
-    },
-    ip_address: '192.168.1.101',
-    user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-    status: 'success',
-    created_at: '2025-12-22T10:35:00Z',
-  },
-  {
-    id: '3',
-    action: 'alert.acknowledged',
-    resource_type: 'alert',
-    resource_id: 'ALT-5678',
-    resource_name: 'High CPU Usage Alert',
-    user_id: '3',
-    user_name: 'Mike Wilson',
-    user_email: 'mike.wilson@example.com',
-    description: 'Acknowledged alert: High CPU Usage',
-    changes: {
-      status: { old: 'active', new: 'acknowledged' },
-    },
-    ip_address: '192.168.1.102',
-    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    status: 'success',
-    created_at: '2025-12-22T10:40:00Z',
-  },
-  {
-    id: '4',
-    action: 'playbook.executed',
-    resource_type: 'playbook',
-    resource_id: 'PB-001',
-    resource_name: 'Auto-Scale Cluster',
-    user_id: '1',
-    user_name: 'Alex Chen',
-    user_email: 'alex.chen@example.com',
-    description: 'Executed playbook: Auto-Scale Cluster',
-    ip_address: '192.168.1.100',
-    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    status: 'success',
-    created_at: '2025-12-22T10:45:00Z',
-  },
-  {
-    id: '5',
-    action: 'user.role_changed',
-    resource_type: 'user',
-    resource_id: 'USR-123',
-    resource_name: 'John Smith',
-    user_id: '2',
-    user_name: 'Sarah Johnson',
-    user_email: 'sarah.johnson@example.com',
-    description: 'Changed user role from Viewer to Operator',
-    changes: {
-      role: { old: 'viewer', new: 'operator' },
-    },
-    ip_address: '192.168.1.101',
-    user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-    status: 'success',
-    created_at: '2025-12-22T09:30:00Z',
-  },
-  {
-    id: '6',
-    action: 'integration.configured',
-    resource_type: 'integration',
-    resource_id: 'INT-SLACK',
-    resource_name: 'Slack Integration',
-    user_id: '2',
-    user_name: 'Sarah Johnson',
-    user_email: 'sarah.johnson@example.com',
-    description: 'Updated Slack integration configuration',
-    changes: {
-      channel: { old: '#alerts', new: '#ops-alerts' },
-    },
-    ip_address: '192.168.1.101',
-    user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-    status: 'success',
-    created_at: '2025-12-22T09:00:00Z',
-  },
-  {
-    id: '7',
-    action: 'login',
-    resource_type: 'auth',
-    resource_id: '',
-    resource_name: '',
-    user_id: '1',
-    user_name: 'Alex Chen',
-    user_email: 'alex.chen@example.com',
-    description: 'User logged in successfully',
-    ip_address: '192.168.1.100',
-    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    status: 'success',
-    created_at: '2025-12-22T08:00:00Z',
-  },
-  {
-    id: '8',
-    action: 'login_failed',
-    resource_type: 'auth',
-    resource_id: '',
-    resource_name: '',
-    user_id: '',
-    user_name: 'Unknown',
-    user_email: 'unknown@example.com',
-    description: 'Failed login attempt',
-    error_message: 'Invalid credentials',
-    ip_address: '10.0.0.50',
-    user_agent: 'curl/7.68.0',
-    status: 'failed',
-    created_at: '2025-12-22T07:45:00Z',
-  },
-  {
-    id: '9',
-    action: 'incident.resolved',
-    resource_type: 'incident',
-    resource_id: 'INC-2025-001',
-    resource_name: 'Database Connection Failure',
-    user_id: '3',
-    user_name: 'Mike Wilson',
-    user_email: 'mike.wilson@example.com',
-    description: 'Resolved incident: Database Connection Failure',
-    changes: {
-      status: { old: 'in_progress', new: 'resolved' },
-    },
-    ip_address: '192.168.1.102',
-    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    status: 'success',
-    created_at: '2025-12-22T11:30:00Z',
-  },
-  {
-    id: '10',
-    action: 'resource.stopped',
-    resource_type: 'cloud_resource',
-    resource_id: 'i-0abc123',
-    resource_name: 'dev-server-01',
-    user_id: '1',
-    user_name: 'Alex Chen',
-    user_email: 'alex.chen@example.com',
-    description: 'Stopped EC2 instance: dev-server-01',
-    changes: {
-      state: { old: 'running', new: 'stopped' },
-    },
-    ip_address: '192.168.1.100',
-    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    status: 'success',
-    created_at: '2025-12-21T18:00:00Z',
-  },
-];
 
 const actionColors: Record<string, string> = {
   'incident.created': 'blue',
@@ -216,7 +30,6 @@ const actionColors: Record<string, string> = {
 };
 
 const resourceTypes = ['All', 'incident', 'alert', 'playbook', 'user', 'integration', 'cloud_resource', 'auth'];
-const actions = ['All', 'Created', 'Updated', 'Assigned', 'Resolved', 'Executed', 'Login', 'Login Failed'];
 
 const AuditLogPage: React.FC = () => {
   const [searchText, setSearchText] = useState('');
@@ -224,22 +37,31 @@ const AuditLogPage: React.FC = () => {
   const [selectedAction, setSelectedAction] = useState('All');
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
-  const filteredLogs = mockAuditLogs.filter((log) => {
+  const { data: logsData, isLoading, refetch } = useGetAuditLogsQuery({
+    page,
+    page_size: pageSize,
+    resource_type: selectedResourceType !== 'All' ? selectedResourceType : undefined,
+  });
+
+  const { data: stats } = useGetAuditLogStatsQuery();
+
+  const logs = logsData?.items || [];
+
+  const filteredLogs = logs.filter((log) => {
     const matchesSearch = !searchText ||
       log.description.toLowerCase().includes(searchText.toLowerCase()) ||
-      log.user_name.toLowerCase().includes(searchText.toLowerCase()) ||
-      log.resource_name.toLowerCase().includes(searchText.toLowerCase());
-    const matchesResourceType = selectedResourceType === 'All' || log.resource_type === selectedResourceType;
+      (log.user_name && log.user_name.toLowerCase().includes(searchText.toLowerCase())) ||
+      (log.resource_name && log.resource_name.toLowerCase().includes(searchText.toLowerCase()));
     const matchesAction = selectedAction === 'All' ||
       log.action.toLowerCase().includes(selectedAction.toLowerCase());
-    return matchesSearch && matchesResourceType && matchesAction;
+    return matchesSearch && matchesAction;
   });
 
   const handleRefresh = () => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 1000);
+    refetch();
   };
 
   const handleExport = () => {
@@ -247,10 +69,10 @@ const AuditLogPage: React.FC = () => {
       ['Timestamp', 'User', 'Action', 'Resource Type', 'Resource', 'Status', 'IP Address'],
       ...filteredLogs.map(log => [
         log.created_at,
-        log.user_name,
+        log.user_name || 'Unknown',
         log.action,
         log.resource_type,
-        log.resource_name,
+        log.resource_name || '',
         log.status,
         log.ip_address,
       ]),
@@ -270,7 +92,7 @@ const AuditLogPage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 180,
-      render: (date) => new Date(date).toLocaleString(),
+      render: (date: string) => new Date(date).toLocaleString(),
       sorter: (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
       defaultSortOrder: 'descend',
     },
@@ -279,12 +101,12 @@ const AuditLogPage: React.FC = () => {
       dataIndex: 'user_name',
       key: 'user_name',
       width: 150,
-      render: (name, record) => (
+      render: (name: string | null, record: AuditLogEntry) => (
         <Space>
           <Avatar size="small" icon={<UserOutlined />} />
           <div>
-            <div>{name}</div>
-            <Text type="secondary" style={{ fontSize: 11 }}>{record.user_email}</Text>
+            <div>{name || 'Unknown'}</div>
+            <Text type="secondary" style={{ fontSize: 11 }}>{record.user_email || 'N/A'}</Text>
           </div>
         </Space>
       ),
@@ -294,14 +116,14 @@ const AuditLogPage: React.FC = () => {
       dataIndex: 'action',
       key: 'action',
       width: 150,
-      render: (action) => (
+      render: (action: string) => (
         <Tag color={actionColors[action] || 'default'}>{action.replace(/\./g, ' ').replace(/_/g, ' ').toUpperCase()}</Tag>
       ),
     },
     {
       title: 'Resource',
       key: 'resource',
-      render: (_, record) => (
+      render: (_: any, record: AuditLogEntry) => (
         <div>
           <Tag>{record.resource_type}</Tag>
           {record.resource_name && <Text>{record.resource_name}</Text>}
@@ -322,7 +144,7 @@ const AuditLogPage: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status) => (
+      render: (status: string) => (
         <Tag color={status === 'success' ? 'green' : 'red'}>{status.toUpperCase()}</Tag>
       ),
     },
@@ -336,7 +158,7 @@ const AuditLogPage: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       width: 80,
-      render: (_, record) => (
+      render: (_: any, record: AuditLogEntry) => (
         <Button
           type="text"
           icon={<EyeOutlined />}
@@ -349,19 +171,15 @@ const AuditLogPage: React.FC = () => {
     },
   ];
 
-  // Calculate stats
-  const todayLogs = mockAuditLogs.filter(
-    log => new Date(log.created_at).toDateString() === new Date().toDateString()
-  );
-  const failedActions = mockAuditLogs.filter(log => log.status === 'failed').length;
-  const uniqueUsers = new Set(mockAuditLogs.map(log => log.user_id)).size;
+  const failedActions = stats?.by_action ? Object.values(stats.by_action).reduce((a, b) => a + b, 0) : 0;
+  const uniqueUsers = stats?.by_user?.length || 0;
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={3} style={{ margin: 0 }}>Audit Log</Title>
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading}>
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={isLoading}>
             Refresh
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExport}>
@@ -374,12 +192,15 @@ const AuditLogPage: React.FC = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="Total Actions Today" value={todayLogs.length} />
+            <Statistic title="Total Actions Today" value={stats?.actions_today || 0} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card>
-            <Statistic title="Failed Actions" value={failedActions} valueStyle={{ color: failedActions > 0 ? '#ff4d4f' : '#52c41a' }} />
+            <Statistic
+              title="Total Actions"
+              value={stats?.total_actions || 0}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
@@ -409,17 +230,6 @@ const AuditLogPage: React.FC = () => {
               <Select.Option key={type} value={type}>{type}</Select.Option>
             ))}
           </Select>
-          <Select
-            placeholder="Action"
-            style={{ width: 150 }}
-            value={selectedAction}
-            onChange={setSelectedAction}
-          >
-            {actions.map(action => (
-              <Select.Option key={action} value={action}>{action}</Select.Option>
-            ))}
-          </Select>
-          <RangePicker />
         </Space>
       </Card>
 
@@ -429,8 +239,17 @@ const AuditLogPage: React.FC = () => {
           columns={columns}
           dataSource={filteredLogs}
           rowKey="id"
-          loading={loading}
-          pagination={{ pageSize: 20, showSizeChanger: true }}
+          loading={isLoading}
+          pagination={{
+            current: page,
+            pageSize: pageSize,
+            total: logsData?.total || 0,
+            showSizeChanger: true,
+            onChange: (newPage, newPageSize) => {
+              setPage(newPage);
+              setPageSize(newPageSize || 20);
+            },
+          }}
         />
       </Card>
 
@@ -450,7 +269,7 @@ const AuditLogPage: React.FC = () => {
               <Descriptions.Item label="User">
                 <Space>
                   <Avatar size="small" icon={<UserOutlined />} />
-                  {selectedLog.user_name} ({selectedLog.user_email})
+                  {selectedLog.user_name || 'Unknown'} ({selectedLog.user_email || 'N/A'})
                 </Space>
               </Descriptions.Item>
               <Descriptions.Item label="Action">
@@ -493,8 +312,8 @@ const AuditLogPage: React.FC = () => {
                       <div>
                         <Text strong>{field}</Text>
                         <div style={{ marginTop: 4 }}>
-                          <Tag color="red">Old: {String(change.old) || 'null'}</Tag>
-                          <Tag color="green">New: {String(change.new)}</Tag>
+                          <Tag color="red">Old: {String((change as any).old) || 'null'}</Tag>
+                          <Tag color="green">New: {String((change as any).new)}</Tag>
                         </div>
                       </div>
                     ),

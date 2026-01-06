@@ -3,9 +3,10 @@ import type { RootState } from '../../app/store';
 import { setAccessToken } from '../slices/authSlice';
 
 const baseQuery = fetchBaseQuery({
-  baseUrl: '/api/v1',
+  baseUrl: 'http://localhost:7027/api/v1',
   prepareHeaders: (headers, { getState }) => {
-    const token = (getState() as RootState).auth.accessToken;
+    // Try to get token from Redux state first, then fall back to localStorage
+    const token = (getState() as RootState).auth.accessToken || localStorage.getItem('accessToken');
     if (token) {
       headers.set('authorization', `Bearer ${token}`);
     }
@@ -14,25 +15,6 @@ const baseQuery = fetchBaseQuery({
     headers.set('Pragma', 'no-cache');
     headers.set('Expires', '0');
     return headers;
-  },
-  fetchFn: (input, options) => {
-    // Add timestamp to URL to bypass browser cache
-    const url = typeof input === 'string' ? input : input.url;
-    const separator = url.includes('?') ? '&' : '?';
-    const cacheBuster = `_t=${Date.now()}`;
-    const newUrl = `${url}${separator}${cacheBuster}`;
-
-    if (typeof input === 'string') {
-      return fetch(newUrl, {
-        ...options,
-        cache: 'no-store', // Disable browser cache
-      });
-    } else {
-      return fetch(new Request(newUrl, input), {
-        ...options,
-        cache: 'no-store',
-      });
-    }
   },
 });
 
@@ -63,7 +45,7 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
         // Store the new token
         const data = refreshResult.data as { access_token: string; refresh_token?: string };
         api.dispatch(setAccessToken(data.access_token));
-        
+
         // Update refresh token if provided
         if (data.refresh_token) {
           localStorage.setItem('refreshToken', data.refresh_token);
@@ -86,6 +68,6 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
 export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['User', 'Incident', 'Alert', 'Team', 'Organization', 'Playbook'],
+  tagTypes: ['User', 'Incident', 'Alert', 'Team', 'Teams', 'Organization', 'Playbook', 'Playbooks', 'Predictions', 'SecurityEvents', 'Tickets', 'KBArticles', 'Investigations', 'AuditLogs', 'CloudResource', 'CloudCost', 'CloudOptimization'],
   endpoints: () => ({}),
 });

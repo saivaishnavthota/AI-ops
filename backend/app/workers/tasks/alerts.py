@@ -1,5 +1,5 @@
 """
-Alert-related background tasks with AI integration.
+Alert-related background tasks.
 """
 
 import asyncio
@@ -10,7 +10,6 @@ from uuid import UUID
 
 from app.workers.celery_app import celery_app
 from app.config.database import AsyncSessionLocal
-from app.ml.service import AIService
 
 logger = logging.getLogger(__name__)
 
@@ -25,139 +24,7 @@ def run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.workers.tasks.alerts.correlate_alerts")
-def correlate_alerts(organization_id: str, time_window_minutes: int = 30) -> dict:
-    """
-    Use AI to correlate related alerts to reduce noise.
-    """
-    logger.info(f"Starting AI alert correlation for org {organization_id}")
 
-    try:
-        async def _correlate():
-            async with AsyncSessionLocal() as db:
-                async with AIService(db) as ai:
-                    result = await ai.correlate_alerts(
-                        organization_id=UUID(organization_id),
-                        time_window_minutes=time_window_minutes,
-                    )
-                    return result
-
-        result = run_async(_correlate())
-
-        correlation = result["correlation"]
-        groups_count = len(correlation.get("groups", []))
-        uncorrelated_count = len(correlation.get("uncorrelated_ids", []))
-
-        logger.info(
-            f"Alert correlation completed: {groups_count} groups found, "
-            f"{uncorrelated_count} uncorrelated alerts"
-        )
-
-        return {
-            "status": "success",
-            "organization_id": organization_id,
-            "groups": groups_count,
-            "uncorrelated": uncorrelated_count,
-            "analysis_summary": correlation.get("analysis_summary", ""),
-            "correlation_details": correlation,
-        }
-
-    except Exception as e:
-        logger.error(f"Alert correlation failed: {e}")
-        raise
-
-
-@celery_app.task(name="app.workers.tasks.alerts.create_incidents_from_correlations")
-def create_incidents_from_correlations(organization_id: str, correlation_data: dict) -> dict:
-    """
-    Create incidents from correlated alert groups.
-    """
-    logger.info(f"Creating incidents from correlations for org {organization_id}")
-
-    try:
-        async def _create_incidents():
-            from sqlalchemy import select
-            from app.models.incident import Incident
-            from app.models.alert import Alert
-            from app.services.incident_service import IncidentService
-
-            created_incidents = []
-
-            async with AsyncSessionLocal() as db:
-                incident_service = IncidentService(db)
-
-                for group in correlation_data.get("groups", []):
-                    # Skip low confidence correlations
-                    if group.get("confidence", 0) < 0.6:
-                        continue
-
-                    alert_ids = group.get("alert_ids", [])
-                    if not alert_ids:
-                        continue
-
-                    # Fetch alerts in this group
-                    result = await db.execute(
-                        select(Alert).where(
-                            Alert.id.in_([UUID(aid) for aid in alert_ids])
-                        )
-                    )
-                    alerts = result.scalars().all()
-
-                    if not alerts:
-                        continue
-
-                    # Create incident from correlation
-                    first_alert = alerts[0]
-                    incident = await incident_service.create(
-                        organization_id=UUID(organization_id),
-                        data={
-                            "title": group.get("suggested_incident_title", f"Correlated alerts: {first_alert.title}"),
-                            "description": f"Auto-created from {len(alerts)} correlated alerts.\n\n{group.get('reasoning', '')}",
-                            "priority": group.get("suggested_incident_priority", "p3"),
-                            "severity": first_alert.severity or "medium",
-                            "category": first_alert.source_type or "monitoring",
-                            "affected_services": list(set(a.service for a in alerts if a.service)),
-                        },
-                    )
-
-                    # Link alerts to incident
-                    for alert in alerts:
-                        alert.incident_id = incident.id
-                        alert.status = "acknowledged"
-
-                    # Store correlation metadata
-                    if not incident.extra_data:
-                        incident.extra_data = {}
-                    incident.extra_data["correlation"] = {
-                        "type": group.get("correlation_type"),
-                        "confidence": group.get("confidence"),
-                        "root_cause_alert_id": group.get("root_cause_id"),
-                        "alert_count": len(alerts),
-                    }
-
-                    await db.commit()
-                    created_incidents.append({
-                        "incident_id": str(incident.id),
-                        "alert_count": len(alerts),
-                        "title": incident.title,
-                    })
-
-            return created_incidents
-
-        created = run_async(_create_incidents())
-
-        logger.info(f"Created {len(created)} incidents from correlations")
-
-        return {
-            "status": "success",
-            "organization_id": organization_id,
-            "incidents_created": len(created),
-            "incidents": created,
-        }
-
-    except Exception as e:
-        logger.error(f"Incident creation from correlations failed: {e}")
-        raise
 
 
 @celery_app.task(name="app.workers.tasks.alerts.cleanup_old_alerts")
@@ -300,53 +167,7 @@ def auto_resolve_stale_alerts(hours: int = 24) -> dict:
         raise
 
 
-@celery_app.task(name="app.workers.tasks.alerts.run_correlation_cycle")
-def run_correlation_cycle() -> dict:
-    """
-    Run correlation for all organizations with recent alerts.
-    """
-    logger.info("Starting correlation cycle for all organizations")
 
-    try:
-        async def _run_cycle():
-            from sqlalchemy import select, func
-            from app.models.alert import Alert
-            from app.models.organization import Organization
-
-            async with AsyncSessionLocal() as db:
-                # Find organizations with recent open alerts
-                cutoff = datetime.utcnow() - timedelta(hours=1)
-                result = await db.execute(
-                    select(Alert.organization_id)
-                    .where(
-                        Alert.status.in_(["open", "acknowledged"]),
-                        Alert.created_at >= cutoff,
-                    )
-                    .group_by(Alert.organization_id)
-                )
-                org_ids = [str(row[0]) for row in result.fetchall()]
-
-            return org_ids
-
-        org_ids = run_async(_run_cycle())
-
-        # Queue correlation tasks for each organization
-        results = []
-        for org_id in org_ids:
-            correlate_alerts.delay(org_id)
-            results.append(org_id)
-
-        logger.info(f"Queued correlation for {len(results)} organizations")
-
-        return {
-            "status": "success",
-            "organizations_queued": len(results),
-            "organization_ids": results,
-        }
-
-    except Exception as e:
-        logger.error(f"Correlation cycle failed: {e}")
-        raise
 
 
 def normalize_webhook_payload(payload: dict, source: str) -> dict:

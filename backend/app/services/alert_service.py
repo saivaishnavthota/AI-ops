@@ -9,7 +9,7 @@ from sqlalchemy import select, func
 from app.models.alert import Alert, AlertSource, AlertCorrelation, AlertStatus
 from app.models.incident import Incident, IncidentStatus
 from app.core.exceptions import NotFoundError, ValidationError
-from app.schemas.alert import AlertCreate, AlertUpdate, AlertStatistics, AlertSourceCreate
+from app.schemas.alert import AlertCreate, AlertUpdate, AlertStatsResponse, AlertSourceCreate
 
 
 class AlertService:
@@ -244,26 +244,32 @@ class AlertService:
 
         return incident
 
-    async def get_statistics(self, organization_id: UUID) -> AlertStatistics:
-        """Get alert statistics."""
-        # Total count
-        total_result = await self.db.execute(
-            select(func.count()).where(Alert.organization_id == organization_id)
+    async def get_statistics(self, organization_id: UUID) -> AlertStatsResponse:
+        """Get alert statistics - optimized with single query."""
+        from sqlalchemy import case
+        from datetime import datetime, timedelta, timezone
+        
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = now - timedelta(days=7)
+        
+        # Single optimized query for all stats
+        result = await self.db.execute(
+            select(
+                func.count().label('total'),
+                func.sum(case((Alert.status == AlertStatus.FIRING.value, 1), else_=0)).label('firing'),
+                func.sum(case((Alert.status == AlertStatus.ACKNOWLEDGED.value, 1), else_=0)).label('acknowledged'),
+                func.sum(case((Alert.status == AlertStatus.RESOLVED.value, 1), else_=0)).label('resolved'),
+                func.sum(case((Alert.status == AlertStatus.SUPPRESSED.value, 1), else_=0)).label('suppressed'),
+                func.sum(case((Alert.severity == 'critical', 1), else_=0)).label('critical'),
+                func.sum(case((Alert.created_at >= today_start, 1), else_=0)).label('today'),
+                func.sum(case((Alert.created_at >= week_start, 1), else_=0)).label('this_week'),
+                func.sum(case((Alert.incident_id.isnot(None), 1), else_=0)).label('converted'),
+            ).where(Alert.organization_id == organization_id)
         )
-        total = total_result.scalar() or 0
+        stats = result.one()
 
-        # Count by status
-        status_counts = {}
-        for status in AlertStatus:
-            result = await self.db.execute(
-                select(func.count()).where(
-                    Alert.organization_id == organization_id,
-                    Alert.status == status.value,
-                )
-            )
-            status_counts[status.value] = result.scalar() or 0
-
-        # Count by severity
+        # Group by queries
         severity_result = await self.db.execute(
             select(Alert.severity, func.count())
             .where(Alert.organization_id == organization_id)
@@ -271,34 +277,25 @@ class AlertService:
         )
         by_severity = dict(severity_result.all())
 
-        # Count by source
-        source_result = await self.db.execute(
-            select(Alert.source, func.count())
+        status_result = await self.db.execute(
+            select(Alert.status, func.count())
             .where(Alert.organization_id == organization_id)
-            .group_by(Alert.source)
+            .group_by(Alert.status)
         )
-        by_source = dict(source_result.all())
+        by_status = dict(status_result.all())
 
-        # Count by service
-        service_result = await self.db.execute(
-            select(Alert.service, func.count())
-            .where(
-                Alert.organization_id == organization_id,
-                Alert.service.isnot(None),
-            )
-            .group_by(Alert.service)
-        )
-        by_service = dict(service_result.all())
-
-        return AlertStatistics(
-            total=total,
-            firing=status_counts.get("firing", 0),
-            acknowledged=status_counts.get("acknowledged", 0),
-            resolved=status_counts.get("resolved", 0),
-            suppressed=status_counts.get("suppressed", 0),
+        return AlertStatsResponse(
+            total_alerts=stats.total or 0,
+            open_alerts=stats.firing or 0,
+            critical_alerts=stats.critical or 0,
+            alerts_today=stats.today or 0,
+            alerts_this_week=stats.this_week or 0,
+            suppressed_alerts=stats.suppressed or 0,
+            converted_to_incidents=stats.converted or 0,
+            deduplicated_alerts=0,  # No AI deduplication
+            correlated_alerts=0,  # No AI correlation
             by_severity=by_severity,
-            by_source=by_source,
-            by_service=by_service,
+            by_status=by_status,
         )
 
     # Alert Source Management

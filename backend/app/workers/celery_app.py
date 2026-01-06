@@ -51,11 +51,6 @@ celery_app.conf.update(
             "task": "app.workers.tasks.incidents.check_stale_incidents",
             "schedule": crontab(minute="*/5"),
         },
-        # Process alert correlations every minute
-        "correlate-alerts": {
-            "task": "app.workers.tasks.alerts.correlate_alerts",
-            "schedule": crontab(minute="*"),
-        },
         # Generate daily summary reports at 6 AM UTC
         "generate-daily-report": {
             "task": "app.workers.tasks.reports.generate_daily_summary",

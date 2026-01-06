@@ -1,100 +1,16 @@
 import React, { useState } from 'react';
 import { Card, Table, Tag, Typography, Space, Button, Avatar, Input, Modal, Form, Select, message, Drawer, Descriptions, Timeline, Popconfirm } from 'antd';
-import { PlusOutlined, UserOutlined, SearchOutlined, EditOutlined, CheckCircleOutlined, CommentOutlined } from '@ant-design/icons';
+import { PlusOutlined, UserOutlined, SearchOutlined, CheckCircleOutlined, CommentOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import {
+  useGetTicketsQuery,
+  useCreateTicketMutation,
+  useUpdateTicketMutation,
+  Ticket,
+} from '../../../store/api/ticketsApi';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
-
-interface Ticket {
-  id: string;
-  subject: string;
-  description: string;
-  status: 'open' | 'in_progress' | 'pending' | 'resolved' | 'closed';
-  priority: 'urgent' | 'high' | 'normal' | 'low';
-  requester: string;
-  assignee: string | null;
-  category: string;
-  createdAt: string;
-  updatedAt: string;
-  comments?: { user: string; text: string; time: string }[];
-}
-
-const initialTickets: Ticket[] = [
-  {
-    id: 'TKT-001',
-    subject: 'Cannot access production dashboard',
-    description: 'Getting 403 error when trying to access the main dashboard. This started happening after the recent deployment.',
-    status: 'open',
-    priority: 'high',
-    requester: 'John Smith',
-    assignee: 'Support Team',
-    category: 'Access Issue',
-    createdAt: '2025-12-22T10:00:00Z',
-    updatedAt: '2025-12-22T10:00:00Z',
-    comments: [
-      { user: 'John Smith', text: 'This is blocking my work', time: '2025-12-22T10:05:00Z' },
-    ],
-  },
-  {
-    id: 'TKT-002',
-    subject: 'Request for new API key',
-    description: 'Need a new API key for the reporting integration. The old one expired.',
-    status: 'in_progress',
-    priority: 'normal',
-    requester: 'Sarah Johnson',
-    assignee: 'Mike Wilson',
-    category: 'Service Request',
-    createdAt: '2025-12-22T09:30:00Z',
-    updatedAt: '2025-12-22T10:15:00Z',
-    comments: [
-      { user: 'Mike Wilson', text: 'Generating new API key now', time: '2025-12-22T10:15:00Z' },
-    ],
-  },
-  {
-    id: 'TKT-003',
-    subject: 'Slow response times on API',
-    description: 'API response times have increased significantly since yesterday. P95 latency is now over 2 seconds.',
-    status: 'in_progress',
-    priority: 'urgent',
-    requester: 'Alex Chen',
-    assignee: 'Emily Davis',
-    category: 'Performance',
-    createdAt: '2025-12-22T08:00:00Z',
-    updatedAt: '2025-12-22T10:30:00Z',
-    comments: [
-      { user: 'Emily Davis', text: 'Investigating database connection pool', time: '2025-12-22T09:00:00Z' },
-      { user: 'Emily Davis', text: 'Found the issue - scaling up the database', time: '2025-12-22T10:30:00Z' },
-    ],
-  },
-  {
-    id: 'TKT-004',
-    subject: 'Update user permissions',
-    description: 'Please add admin access for the new team member Tom Anderson.',
-    status: 'pending',
-    priority: 'low',
-    requester: 'Lisa Brown',
-    assignee: null,
-    category: 'Access Issue',
-    createdAt: '2025-12-21T16:00:00Z',
-    updatedAt: '2025-12-21T16:00:00Z',
-  },
-  {
-    id: 'TKT-005',
-    subject: 'Monthly report generation failed',
-    description: 'The scheduled monthly report did not generate this morning. Error: Timeout exceeded.',
-    status: 'resolved',
-    priority: 'normal',
-    requester: 'Tom Anderson',
-    assignee: 'Support Team',
-    category: 'Bug Report',
-    createdAt: '2025-12-21T09:00:00Z',
-    updatedAt: '2025-12-21T14:00:00Z',
-    comments: [
-      { user: 'Support Team', text: 'Increased timeout and reran the report successfully', time: '2025-12-21T14:00:00Z' },
-    ],
-  },
-];
 
 const statusColors: Record<string, string> = {
   open: 'blue',
@@ -115,7 +31,10 @@ const categoryOptions = ['Access Issue', 'Service Request', 'Performance', 'Bug 
 const assigneeOptions = ['Support Team', 'Mike Wilson', 'Emily Davis', 'Alex Chen', 'John Smith'];
 
 const TicketsPage: React.FC = () => {
-  const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
+  const { data: ticketsData, isLoading } = useGetTicketsQuery({ skip: 0, limit: 100 });
+  const [createTicket] = useCreateTicketMutation();
+  const [updateTicket] = useUpdateTicketMutation();
+
   const [searchText, setSearchText] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
@@ -123,32 +42,30 @@ const TicketsPage: React.FC = () => {
   const [newComment, setNewComment] = useState('');
   const [form] = Form.useForm();
 
+  const tickets = ticketsData?.items || [];
+
   const filteredTickets = tickets.filter(t =>
     t.subject.toLowerCase().includes(searchText.toLowerCase()) ||
     t.id.toLowerCase().includes(searchText.toLowerCase()) ||
-    t.requester.toLowerCase().includes(searchText.toLowerCase())
+    t.requester_name.toLowerCase().includes(searchText.toLowerCase())
   );
 
-  const handleCreate = () => {
-    form.validateFields().then((values) => {
-      const newTicket: Ticket = {
-        id: `TKT-${String(Date.now()).slice(-3)}`,
+  const handleCreate = async () => {
+    try {
+      const values = await form.validateFields();
+      await createTicket({
         subject: values.subject,
         description: values.description,
-        status: 'open',
         priority: values.priority,
-        requester: 'Current User',
-        assignee: values.assignee || null,
         category: values.category,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        comments: [],
-      };
-      setTickets([newTicket, ...tickets]);
-      message.success(`Ticket ${newTicket.id} created`);
+        assignee_name: values.assignee || undefined,
+      }).unwrap();
+      message.success('Ticket created successfully');
       setIsCreateModalOpen(false);
       form.resetFields();
-    });
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to create ticket');
+    }
   };
 
   const handleViewDetails = (ticket: Ticket) => {
@@ -156,36 +73,54 @@ const TicketsPage: React.FC = () => {
     setIsDetailDrawerOpen(true);
   };
 
-  const handleAssign = (ticket: Ticket, assignee: string) => {
-    setTickets(tickets.map(t =>
-      t.id === ticket.id
-        ? { ...t, assignee, status: t.status === 'open' ? 'in_progress' : t.status, updatedAt: new Date().toISOString() }
-        : t
-    ));
-    message.success(`Ticket assigned to ${assignee}`);
+  const handleAssign = async (ticket: Ticket, assignee: string) => {
+    try {
+      await updateTicket({
+        id: ticket.id,
+        data: {
+          assignee_name: assignee,
+          status: ticket.status === 'open' ? 'in_progress' : ticket.status,
+        },
+      }).unwrap();
+      message.success(`Ticket assigned to ${assignee}`);
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to assign ticket');
+    }
   };
 
-  const handleResolve = (ticket: Ticket) => {
-    setTickets(tickets.map(t =>
-      t.id === ticket.id ? { ...t, status: 'resolved', updatedAt: new Date().toISOString() } : t
-    ));
-    message.success(`Ticket ${ticket.id} resolved`);
+  const handleResolve = async (ticket: Ticket) => {
+    try {
+      await updateTicket({
+        id: ticket.id,
+        data: { status: 'resolved' },
+      }).unwrap();
+      message.success(`Ticket ${ticket.id} resolved`);
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to resolve ticket');
+    }
   };
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!newComment.trim() || !selectedTicket) return;
-    const comment = { user: 'Current User', text: newComment, time: new Date().toISOString() };
-    setTickets(tickets.map(t =>
-      t.id === selectedTicket.id
-        ? { ...t, comments: [...(t.comments || []), comment], updatedAt: new Date().toISOString() }
-        : t
-    ));
-    setSelectedTicket({
-      ...selectedTicket,
-      comments: [...(selectedTicket.comments || []), comment],
-    });
-    setNewComment('');
-    message.success('Comment added');
+
+    try {
+      const comment = { user: 'Current User', text: newComment, time: new Date().toISOString() };
+      const updatedComments = [...(selectedTicket.comments || []), comment];
+
+      await updateTicket({
+        id: selectedTicket.id,
+        data: { comments: updatedComments },
+      }).unwrap();
+
+      setSelectedTicket({
+        ...selectedTicket,
+        comments: updatedComments,
+      });
+      setNewComment('');
+      message.success('Comment added');
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to add comment');
+    }
   };
 
   const columns: ColumnsType<Ticket> = [
@@ -193,10 +128,10 @@ const TicketsPage: React.FC = () => {
       title: 'Ticket',
       dataIndex: 'subject',
       key: 'subject',
-      render: (text, record) => (
+      render: (text: string, record: Ticket) => (
         <div>
           <Space style={{ marginBottom: 4 }}>
-            <Text strong>{record.id}</Text>
+            <Text strong>{record.id.substring(0, 8)}</Text>
             <Tag>{record.category}</Tag>
           </Space>
           <div style={{ fontWeight: 500 }}>{text}</div>
@@ -208,7 +143,7 @@ const TicketsPage: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 120,
-      render: (status) => (
+      render: (status: string) => (
         <Tag color={statusColors[status]}>{status.replace('_', ' ').toUpperCase()}</Tag>
       ),
     },
@@ -217,16 +152,16 @@ const TicketsPage: React.FC = () => {
       dataIndex: 'priority',
       key: 'priority',
       width: 100,
-      render: (priority) => (
+      render: (priority: string) => (
         <Tag color={priorityColors[priority]}>{priority.toUpperCase()}</Tag>
       ),
     },
     {
       title: 'Requester',
-      dataIndex: 'requester',
-      key: 'requester',
+      dataIndex: 'requester_name',
+      key: 'requester_name',
       width: 140,
-      render: (name) => (
+      render: (name: string) => (
         <Space>
           <Avatar size="small" icon={<UserOutlined />} />
           {name}
@@ -235,10 +170,10 @@ const TicketsPage: React.FC = () => {
     },
     {
       title: 'Assignee',
-      dataIndex: 'assignee',
-      key: 'assignee',
+      dataIndex: 'assignee_name',
+      key: 'assignee_name',
       width: 140,
-      render: (name, record) => name ? (
+      render: (name: string | null, record: Ticket) => name ? (
         <Space>
           <Avatar size="small" icon={<UserOutlined />} />
           {name}
@@ -256,16 +191,16 @@ const TicketsPage: React.FC = () => {
     },
     {
       title: 'Updated',
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
       width: 140,
-      render: (date) => new Date(date).toLocaleString(),
+      render: (date: string) => new Date(date).toLocaleString(),
     },
     {
       title: 'Actions',
       key: 'actions',
       width: 150,
-      render: (_, record) => (
+      render: (_: any, record: Ticket) => (
         <Space>
           <Button
             type="text"
@@ -314,6 +249,7 @@ const TicketsPage: React.FC = () => {
           columns={columns}
           dataSource={filteredTickets}
           rowKey="id"
+          loading={isLoading}
           pagination={{ pageSize: 10 }}
         />
       </Card>
@@ -356,7 +292,7 @@ const TicketsPage: React.FC = () => {
 
       {/* Detail Drawer */}
       <Drawer
-        title={`Ticket: ${selectedTicket?.id}`}
+        title={`Ticket: ${selectedTicket?.id.substring(0, 8)}`}
         open={isDetailDrawerOpen}
         onClose={() => { setIsDetailDrawerOpen(false); setSelectedTicket(null); setNewComment(''); }}
         width={600}
@@ -380,14 +316,14 @@ const TicketsPage: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Category"><Tag>{selectedTicket.category}</Tag></Descriptions.Item>
               <Descriptions.Item label="Requester">
-                <Space><Avatar size="small" icon={<UserOutlined />} />{selectedTicket.requester}</Space>
+                <Space><Avatar size="small" icon={<UserOutlined />} />{selectedTicket.requester_name}</Space>
               </Descriptions.Item>
               <Descriptions.Item label="Assignee">
-                {selectedTicket.assignee ? (
-                  <Space><Avatar size="small" icon={<UserOutlined />} />{selectedTicket.assignee}</Space>
+                {selectedTicket.assignee_name ? (
+                  <Space><Avatar size="small" icon={<UserOutlined />} />{selectedTicket.assignee_name}</Space>
                 ) : <Text type="secondary">Unassigned</Text>}
               </Descriptions.Item>
-              <Descriptions.Item label="Created">{new Date(selectedTicket.createdAt).toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label="Created">{new Date(selectedTicket.created_at).toLocaleString()}</Descriptions.Item>
             </Descriptions>
 
             <Card title="Description" size="small">
@@ -397,7 +333,7 @@ const TicketsPage: React.FC = () => {
             <Card title="Comments" size="small">
               {selectedTicket.comments && selectedTicket.comments.length > 0 ? (
                 <Timeline
-                  items={selectedTicket.comments.map(c => ({
+                  items={selectedTicket.comments.map((c: any) => ({
                     color: 'blue',
                     dot: <CommentOutlined />,
                     children: (

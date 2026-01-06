@@ -1,122 +1,17 @@
 import React, { useState } from 'react';
-import { Card, Table, Tag, Typography, Space, Progress, Statistic, Row, Col, Alert, Button, Modal, message, Popconfirm, Drawer, Timeline, Descriptions } from 'antd';
+import { Card, Table, Tag, Typography, Space, Progress, Statistic, Row, Col, Alert, Button, Popconfirm, Drawer, Timeline, Descriptions } from 'antd';
 import { RobotOutlined, WarningOutlined, CheckCircleOutlined, ThunderboltOutlined, EyeOutlined, CloseOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import {
+  useGetPredictionsQuery,
+  useGetPredictionStatsQuery,
+  useTakeActionOnPredictionMutation,
+  useDismissPredictionMutation,
+  Prediction,
+} from '../../../store/api/predictionsApi';
+import { message } from 'antd';
 
 const { Title, Text, Paragraph } = Typography;
-
-interface Prediction {
-  id: string;
-  type: string;
-  resource: string;
-  prediction: string;
-  likelihood: number;
-  impact: 'critical' | 'high' | 'medium' | 'low';
-  timeframe: string;
-  status: 'active' | 'prevented' | 'occurred' | 'expired';
-  recommendedAction: string;
-  details?: string;
-  preventionSteps?: string[];
-}
-
-const initialPredictions: Prediction[] = [
-  {
-    id: '1',
-    type: 'Capacity',
-    resource: 'prod-db-primary',
-    prediction: 'Database storage will reach 90% capacity',
-    likelihood: 0.87,
-    impact: 'high',
-    timeframe: '3-5 days',
-    status: 'active',
-    recommendedAction: 'Increase storage allocation or archive old data',
-    details: 'Based on current growth rate of 2.5GB/day, the database will reach 90% capacity within 3-5 days. Current usage is at 78%.',
-    preventionSteps: [
-      'Archive data older than 90 days to cold storage',
-      'Increase RDS storage from 500GB to 750GB',
-      'Review and optimize large tables',
-      'Set up storage usage alerts at 80% and 85%',
-    ],
-  },
-  {
-    id: '2',
-    type: 'Performance',
-    resource: 'api-gateway',
-    prediction: 'API latency will exceed SLA threshold during peak hours',
-    likelihood: 0.72,
-    impact: 'medium',
-    timeframe: '1-2 days',
-    status: 'active',
-    recommendedAction: 'Scale up API instances before peak period',
-    details: 'Historical traffic patterns show a 40% increase in requests during the upcoming promotion. Current capacity may not handle the load.',
-    preventionSteps: [
-      'Pre-scale API instances from 3 to 5',
-      'Enable auto-scaling with aggressive thresholds',
-      'Warm up the cache before peak period',
-      'Set up latency alerts at 500ms P95',
-    ],
-  },
-  {
-    id: '3',
-    type: 'Failure',
-    resource: 'cache-cluster-node-3',
-    prediction: 'Memory exhaustion risk based on current growth pattern',
-    likelihood: 0.65,
-    impact: 'high',
-    timeframe: '7-10 days',
-    status: 'active',
-    recommendedAction: 'Review cache eviction policy and memory allocation',
-    details: 'Node memory usage has been growing at 1% per day. At current rate, it will reach critical levels in 7-10 days.',
-    preventionSteps: [
-      'Review cache TTL settings',
-      'Implement LRU eviction policy',
-      'Add another cache node to distribute load',
-      'Monitor memory usage trends',
-    ],
-  },
-  {
-    id: '4',
-    type: 'Security',
-    resource: 'SSL Certificate',
-    prediction: 'Certificate for app.example.com will expire',
-    likelihood: 1.0,
-    impact: 'critical',
-    timeframe: '14 days',
-    status: 'active',
-    recommendedAction: 'Renew SSL certificate before expiration',
-    details: 'The SSL certificate for app.example.com expires on January 5, 2025. Certificate must be renewed and deployed before this date.',
-    preventionSteps: [
-      'Request new certificate from Let\'s Encrypt',
-      'Deploy new certificate to load balancer',
-      'Verify certificate chain is complete',
-      'Set up automated certificate renewal',
-    ],
-  },
-  {
-    id: '5',
-    type: 'Capacity',
-    resource: 'prod-logs-bucket',
-    prediction: 'Log storage exceeded threshold',
-    likelihood: 0.95,
-    impact: 'medium',
-    timeframe: 'Occurred',
-    status: 'prevented',
-    recommendedAction: 'Implemented log rotation policy',
-    details: 'AI predicted storage issue 5 days ago. Log rotation was implemented, preventing the issue.',
-  },
-  {
-    id: '6',
-    type: 'Performance',
-    resource: 'worker-queue',
-    prediction: 'Queue backlog predicted to cause delays',
-    likelihood: 0.78,
-    impact: 'medium',
-    timeframe: 'Expired',
-    status: 'expired',
-    recommendedAction: 'Prediction window passed without occurrence',
-    details: 'The predicted backlog did not occur. Queue processing remained within normal parameters.',
-  },
-];
 
 const impactColors: Record<string, string> = {
   critical: 'red',
@@ -133,35 +28,41 @@ const statusColors: Record<string, string> = {
 };
 
 const PredictionsPage: React.FC = () => {
-  const [predictions, setPredictions] = useState<Prediction[]>(initialPredictions);
+  const { data: predictionsData, isLoading } = useGetPredictionsQuery({ skip: 0, limit: 100 });
+  const { data: stats } = useGetPredictionStatsQuery();
+  const [takeAction] = useTakeActionOnPredictionMutation();
+  const [dismissPrediction] = useDismissPredictionMutation();
+
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [selectedPrediction, setSelectedPrediction] = useState<Prediction | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const activePredictions = predictions.filter(p => p.status === 'active');
-  const preventedCount = predictions.filter(p => p.status === 'prevented').length;
-  const avgLikelihood = activePredictions.length > 0
-    ? activePredictions.reduce((sum, p) => sum + p.likelihood, 0) / activePredictions.length
-    : 0;
+  const predictions = predictionsData?.items || [];
 
-  const handleTakeAction = (prediction: Prediction) => {
+  const handleTakeAction = async (prediction: Prediction) => {
     setActionLoading(prediction.id);
     message.loading(`Applying preventive measures for ${prediction.type}...`, 2);
 
-    setTimeout(() => {
-      setPredictions(predictions.map(p =>
-        p.id === prediction.id ? { ...p, status: 'prevented' } : p
-      ));
-      setActionLoading(null);
+    try {
+      await takeAction({
+        id: prediction.id,
+        data: { action_taken: prediction.recommended_action },
+      }).unwrap();
       message.success(`Preventive action completed! ${prediction.type} issue has been addressed.`);
-    }, 2500);
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to take action');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleDismiss = (prediction: Prediction) => {
-    setPredictions(predictions.map(p =>
-      p.id === prediction.id ? { ...p, status: 'expired' } : p
-    ));
-    message.info(`Prediction dismissed: ${prediction.type}`);
+  const handleDismiss = async (prediction: Prediction) => {
+    try {
+      await dismissPrediction(prediction.id).unwrap();
+      message.info(`Prediction dismissed: ${prediction.type}`);
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to dismiss prediction');
+    }
   };
 
   const handleViewDetails = (prediction: Prediction) => {
@@ -174,7 +75,7 @@ const PredictionsPage: React.FC = () => {
       title: 'Prediction',
       dataIndex: 'prediction',
       key: 'prediction',
-      render: (text, record) => (
+      render: (text: string, record: Prediction) => (
         <div>
           <Space style={{ marginBottom: 4 }}>
             <Tag color="purple">{record.type}</Tag>
@@ -182,7 +83,7 @@ const PredictionsPage: React.FC = () => {
           </Space>
           <div style={{ fontWeight: 500 }}>{text}</div>
           <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-            <ThunderboltOutlined /> {record.recommendedAction}
+            <ThunderboltOutlined /> {record.recommended_action}
           </div>
         </div>
       ),
@@ -192,7 +93,7 @@ const PredictionsPage: React.FC = () => {
       dataIndex: 'likelihood',
       key: 'likelihood',
       width: 140,
-      render: (likelihood) => (
+      render: (likelihood: number) => (
         <Space direction="vertical" size={0}>
           <Progress
             percent={Math.round(likelihood * 100)}
@@ -209,7 +110,7 @@ const PredictionsPage: React.FC = () => {
       dataIndex: 'impact',
       key: 'impact',
       width: 100,
-      render: (impact) => (
+      render: (impact: string) => (
         <Tag color={impactColors[impact]}>{impact.toUpperCase()}</Tag>
       ),
     },
@@ -224,10 +125,10 @@ const PredictionsPage: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 120,
-      render: (status) => (
+      render: (status: string) => (
         <Tag
           color={statusColors[status]}
-          icon={status === 'prevented' ? <CheckCircleOutlined /> : status === 'active' ? <WarningOutlined /> : null}
+          icon={status === 'prevented' ? <CheckCircleOutlined /> : status === 'active' ? <WarningOutlined /> : undefined}
         >
           {status.toUpperCase()}
         </Tag>
@@ -237,7 +138,7 @@ const PredictionsPage: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       width: 200,
-      render: (_, record) => (
+      render: (_: any, record: Prediction) => (
         <Space>
           <Button
             type="text"
@@ -296,7 +197,7 @@ const PredictionsPage: React.FC = () => {
           <Card>
             <Statistic
               title="Active Predictions"
-              value={activePredictions.length}
+              value={stats?.active_predictions || 0}
               prefix={<WarningOutlined />}
               valueStyle={{ color: '#faad14' }}
             />
@@ -306,7 +207,7 @@ const PredictionsPage: React.FC = () => {
           <Card>
             <Statistic
               title="Issues Prevented"
-              value={preventedCount}
+              value={stats?.prevented_count || 0}
               prefix={<CheckCircleOutlined />}
               valueStyle={{ color: '#52c41a' }}
             />
@@ -316,7 +217,7 @@ const PredictionsPage: React.FC = () => {
           <Card>
             <Statistic
               title="Avg. AI Confidence"
-              value={Math.round(avgLikelihood * 100)}
+              value={Math.round((stats?.avg_likelihood || 0) * 100)}
               suffix="%"
               prefix={<RobotOutlined />}
             />
@@ -329,6 +230,7 @@ const PredictionsPage: React.FC = () => {
           columns={columns}
           dataSource={predictions}
           rowKey="id"
+          loading={isLoading}
           pagination={{ pageSize: 10 }}
         />
       </Card>
@@ -373,17 +275,17 @@ const PredictionsPage: React.FC = () => {
 
             <Card title="Recommended Action" size="small">
               <Alert
-                message={selectedPrediction.recommendedAction}
+                message={selectedPrediction.recommended_action}
                 type="warning"
                 icon={<ThunderboltOutlined />}
                 showIcon
               />
             </Card>
 
-            {selectedPrediction.preventionSteps && (
+            {selectedPrediction.prevention_steps && selectedPrediction.prevention_steps.length > 0 && (
               <Card title="Prevention Steps" size="small">
                 <Timeline
-                  items={selectedPrediction.preventionSteps.map((step, i) => ({
+                  items={selectedPrediction.prevention_steps.map((step: string, i: number) => ({
                     color: 'blue',
                     children: (
                       <div>

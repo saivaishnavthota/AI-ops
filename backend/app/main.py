@@ -77,7 +77,7 @@ app.add_middleware(
     allow_origins=safe_origins if safe_origins else ["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    allow_headers=["*"],  # Allow all headers for development
     expose_headers=["X-Total-Count", "X-Page", "X-Page-Size"],
     max_age=600,  # Cache preflight requests for 10 minutes
 )

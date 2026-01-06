@@ -10,6 +10,16 @@ from app.api.v1.endpoints import (
     audit_logs,
     websocket,
     users,
+    analytics,
+    cloud,
+    teams,
+    tickets,
+    playbooks,
+    predictions,
+    virtual_agent,
+    # Temporarily disabled until converted to async
+    # security,
+    # investigations,
 )
 
 # Create main API router
@@ -21,6 +31,17 @@ api_router.include_router(organizations.router)
 api_router.include_router(incidents.router)
 api_router.include_router(alerts.router)
 api_router.include_router(ai.router)
+api_router.include_router(analytics.router)
+api_router.include_router(cloud.router)
+api_router.include_router(teams.router)
+api_router.include_router(tickets.router)
+api_router.include_router(tickets.kb_router)
+api_router.include_router(playbooks.router)
+api_router.include_router(predictions.router)
+api_router.include_router(virtual_agent.router)
+# Temporarily disabled until converted to async
+# api_router.include_router(security.router)
+# api_router.include_router(investigations.router)
 api_router.include_router(
     notifications.router,
     prefix="/notifications",

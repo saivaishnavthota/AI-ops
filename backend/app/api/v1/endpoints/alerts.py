@@ -14,7 +14,7 @@ from app.schemas.alert import (
     AlertAcknowledgeRequest,
     AlertSuppressRequest,
     AlertCreateIncidentRequest,
-    AlertStatistics,
+    AlertStatsResponse,
     AlertSourceCreate,
     AlertSourceResponse,
 )
@@ -81,7 +81,7 @@ async def ingest_alert(
     return AlertResponse.model_validate(alert)
 
 
-@router.get("/statistics", response_model=AlertStatistics)
+@router.get("/statistics", response_model=AlertStatsResponse)
 async def get_alert_statistics(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
@@ -226,3 +226,4 @@ async def create_incident_from_alert(
         return IncidentResponse.model_validate(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+

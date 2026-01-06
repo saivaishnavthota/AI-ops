@@ -920,10 +920,19 @@ async def seed_alert_correlations(session: AsyncSession, alerts: List[Alert]) ->
         # Create a correlation group for related alerts
         group_id = uuid.uuid4()
         for i, alert in enumerate(service_alert_list[:5]):  # Max 5 alerts per group
+            # Link each alert to the next one in the group
+            if i < len(service_alert_list[:5]) - 1:
+                related_alert = service_alert_list[i + 1]
+            else:
+                # Last alert links back to first
+                related_alert = service_alert_list[0]
+            
             correlation = AlertCorrelation(
                 id=uuid.uuid4(),
+                organization_id=alert.organization_id,
                 correlation_group_id=group_id,
                 alert_id=alert.id,
+                related_alert_id=related_alert.id,
                 correlation_type=random.choice(["temporal", "topological", "causal"]),
                 confidence_score=Decimal(str(round(random.uniform(0.7, 0.95), 2))),
                 correlation_reason=f"Alerts share same service: {service}",

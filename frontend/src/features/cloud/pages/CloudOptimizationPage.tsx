@@ -1,105 +1,15 @@
 import React, { useState } from 'react';
-import { Card, Table, Typography, Tag, Button, Space, Alert, Progress, Statistic, Row, Col, Modal, message, Popconfirm } from 'antd';
+import { Card, Table, Typography, Tag, Button, Space, Alert, Progress, Statistic, Row, Col, Modal, message, Popconfirm, Spin } from 'antd';
 import { CheckOutlined, DollarOutlined, RobotOutlined, CloseOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import {
+  useListOptimizationRecommendationsQuery,
+  useApplyOptimizationRecommendationMutation,
+  useDismissOptimizationRecommendationMutation,
+  type OptimizationRecommendation,
+} from '../../../store/api/cloudApi';
 
 const { Title, Text, Paragraph } = Typography;
-
-interface Recommendation {
-  id: string;
-  type: string;
-  resource: string;
-  description: string;
-  impact: 'high' | 'medium' | 'low';
-  savings: number;
-  effort: string;
-  status: 'pending' | 'applied' | 'dismissed';
-  aiConfidence: number;
-  steps?: string[];
-}
-
-const initialRecommendations: Recommendation[] = [
-  {
-    id: '1',
-    type: 'Right-sizing',
-    resource: 'prod-api-server-2',
-    description: 'Instance is consistently underutilized (avg CPU 15%). Consider downsizing from m5.xlarge to m5.large.',
-    impact: 'high',
-    savings: 52.50,
-    effort: 'Low',
-    status: 'pending',
-    aiConfidence: 0.92,
-    steps: [
-      'Create a snapshot of the current instance',
-      'Launch a new m5.large instance with the same configuration',
-      'Migrate traffic to the new instance',
-      'Verify application performance',
-      'Terminate the old m5.xlarge instance',
-    ],
-  },
-  {
-    id: '2',
-    type: 'Reserved Instance',
-    resource: 'prod-db-primary',
-    description: 'This instance has been running continuously for 6 months. Reserved Instance would save 40%.',
-    impact: 'high',
-    savings: 180.00,
-    effort: 'Low',
-    status: 'pending',
-    aiConfidence: 0.95,
-    steps: [
-      'Review current RDS instance usage patterns',
-      'Calculate 1-year vs 3-year reserved instance pricing',
-      'Purchase reserved instance through AWS Console',
-      'Savings will be applied automatically',
-    ],
-  },
-  {
-    id: '3',
-    type: 'Unused Resource',
-    resource: 'staging-api-server',
-    description: 'Instance has been stopped for 30+ days. Consider terminating or archiving.',
-    impact: 'low',
-    savings: 15.00,
-    effort: 'Low',
-    status: 'pending',
-    aiConfidence: 0.88,
-    steps: [
-      'Confirm instance is no longer needed',
-      'Create AMI backup if preservation is required',
-      'Terminate the stopped instance',
-      'Delete associated EBS volumes',
-    ],
-  },
-  {
-    id: '4',
-    type: 'Storage Optimization',
-    resource: 'prod-logs-bucket',
-    description: 'Move infrequently accessed logs (>90 days) to S3 Glacier for 80% cost reduction.',
-    impact: 'medium',
-    savings: 85.00,
-    effort: 'Medium',
-    status: 'applied',
-    aiConfidence: 0.91,
-  },
-  {
-    id: '5',
-    type: 'Network Optimization',
-    resource: 'NAT Gateway',
-    description: 'High data transfer costs detected. Consider VPC endpoints for S3 and DynamoDB.',
-    impact: 'medium',
-    savings: 120.00,
-    effort: 'Medium',
-    status: 'pending',
-    aiConfidence: 0.85,
-    steps: [
-      'Create VPC endpoint for S3',
-      'Create VPC endpoint for DynamoDB',
-      'Update route tables to use VPC endpoints',
-      'Monitor NAT Gateway data transfer reduction',
-    ],
-  },
-];
 
 const impactColors: Record<string, string> = {
   high: 'red',
@@ -114,41 +24,47 @@ const statusColors: Record<string, string> = {
 };
 
 const CloudOptimizationPage: React.FC = () => {
-  const [recommendations, setRecommendations] = useState<Recommendation[]>(initialRecommendations);
+  const { data: recommendations, isLoading, refetch } = useListOptimizationRecommendationsQuery();
+  const [applyRecommendation] = useApplyOptimizationRecommendationMutation();
+  const [dismissRecommendation] = useDismissOptimizationRecommendationMutation();
+
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [selectedRecommendation, setSelectedRecommendation] = useState<Recommendation | null>(null);
+  const [selectedRecommendation, setSelectedRecommendation] = useState<OptimizationRecommendation | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
 
-  const pendingRecommendations = recommendations.filter(r => r.status === 'pending');
+  const pendingRecommendations = recommendations?.filter(r => r.status === 'pending') || [];
   const totalSavings = pendingRecommendations.reduce((sum, r) => sum + r.savings, 0);
-  const appliedSavings = recommendations.filter(r => r.status === 'applied').reduce((sum, r) => sum + r.savings, 0);
+  const appliedSavings = recommendations?.filter(r => r.status === 'applied').reduce((sum, r) => sum + r.savings, 0) || 0;
 
-  const handleApply = (recommendation: Recommendation) => {
+  const handleApply = async (recommendation: OptimizationRecommendation) => {
     setApplyingId(recommendation.id);
-    message.loading(`Applying optimization: ${recommendation.type}...`, 2);
-
-    setTimeout(() => {
-      setRecommendations(recommendations.map(r =>
-        r.id === recommendation.id ? { ...r, status: 'applied' } : r
-      ));
+    try {
+      const result = await applyRecommendation(recommendation.id).unwrap();
+      message.success(`${recommendation.type} optimization applied successfully! Saving $${result.savings}/mo`);
+      refetch();
+    } catch (error) {
+      message.error('Failed to apply optimization');
+    } finally {
       setApplyingId(null);
-      message.success(`${recommendation.type} optimization applied successfully! Saving $${recommendation.savings}/mo`);
-    }, 2000);
+    }
   };
 
-  const handleDismiss = (recommendation: Recommendation) => {
-    setRecommendations(recommendations.map(r =>
-      r.id === recommendation.id ? { ...r, status: 'dismissed' } : r
-    ));
-    message.info(`Recommendation dismissed: ${recommendation.type}`);
+  const handleDismiss = async (recommendation: OptimizationRecommendation) => {
+    try {
+      await dismissRecommendation(recommendation.id).unwrap();
+      message.info(`Recommendation dismissed: ${recommendation.type}`);
+      refetch();
+    } catch (error) {
+      message.error('Failed to dismiss recommendation');
+    }
   };
 
-  const handleViewDetails = (recommendation: Recommendation) => {
+  const handleViewDetails = (recommendation: OptimizationRecommendation) => {
     setSelectedRecommendation(recommendation);
     setIsDetailModalOpen(true);
   };
 
-  const columns: ColumnsType<Recommendation> = [
+  const columns: ColumnsType<OptimizationRecommendation> = [
     {
       title: 'Recommendation',
       dataIndex: 'description',
@@ -249,6 +165,10 @@ const CloudOptimizationPage: React.FC = () => {
       ),
     },
   ];
+
+  if (isLoading) {
+    return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
+  }
 
   return (
     <div>

@@ -1,36 +1,16 @@
 import React, { useState } from 'react';
-import { Card, Table, Tag, Space, Typography, Progress, Statistic, Row, Col, Badge, Button, Modal, Descriptions, message, Popconfirm } from 'antd';
+import { Card, Table, Tag, Space, Typography, Progress, Statistic, Row, Col, Badge, Button, Modal, Descriptions, message, Popconfirm, Spin } from 'antd';
 import { CloudServerOutlined, DatabaseOutlined, HddOutlined, GlobalOutlined, EyeOutlined, PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import {
+  useListCloudResourcesQuery,
+  useStartCloudResourceMutation,
+  useStopCloudResourceMutation,
+  useRebootCloudResourceMutation,
+  type CloudResource,
+} from '../../../store/api/cloudApi';
 
 const { Title, Text } = Typography;
-
-interface CloudResource {
-  id: string;
-  name: string;
-  type: string;
-  provider: string;
-  region: string;
-  status: 'running' | 'stopped' | 'pending' | 'error';
-  cpu: number;
-  memory: number;
-  cost: number;
-  instanceType?: string;
-  privateIp?: string;
-  publicIp?: string;
-  launchTime?: string;
-}
-
-const initialResources: CloudResource[] = [
-  { id: '1', name: 'prod-api-server-1', type: 'EC2', provider: 'AWS', region: 'us-east-1', status: 'running', cpu: 45, memory: 62, cost: 156.50, instanceType: 't3.large', privateIp: '10.0.1.15', publicIp: '54.123.45.67', launchTime: '2025-11-15T08:00:00Z' },
-  { id: '2', name: 'prod-api-server-2', type: 'EC2', provider: 'AWS', region: 'us-east-1', status: 'running', cpu: 38, memory: 55, cost: 156.50, instanceType: 't3.large', privateIp: '10.0.1.16', publicIp: '54.123.45.68', launchTime: '2025-11-15T08:05:00Z' },
-  { id: '3', name: 'prod-db-primary', type: 'RDS', provider: 'AWS', region: 'us-east-1', status: 'running', cpu: 72, memory: 85, cost: 450.00, instanceType: 'db.r5.xlarge', privateIp: '10.0.2.10', launchTime: '2025-10-01T00:00:00Z' },
-  { id: '4', name: 'prod-db-replica', type: 'RDS', provider: 'AWS', region: 'us-west-2', status: 'running', cpu: 25, memory: 40, cost: 350.00, instanceType: 'db.r5.large', privateIp: '10.1.2.10', launchTime: '2025-10-01T00:00:00Z' },
-  { id: '5', name: 'prod-redis-cluster', type: 'ElastiCache', provider: 'AWS', region: 'us-east-1', status: 'running', cpu: 15, memory: 45, cost: 89.00, instanceType: 'cache.r5.large', privateIp: '10.0.3.5', launchTime: '2025-09-15T00:00:00Z' },
-  { id: '6', name: 'staging-api-server', type: 'EC2', provider: 'AWS', region: 'us-east-1', status: 'stopped', cpu: 0, memory: 0, cost: 0, instanceType: 't3.medium', privateIp: '10.0.4.10', launchTime: '2025-12-01T00:00:00Z' },
-  { id: '7', name: 'dev-kubernetes-cluster', type: 'EKS', provider: 'AWS', region: 'us-west-2', status: 'running', cpu: 55, memory: 70, cost: 245.00, instanceType: '3 nodes', privateIp: '10.1.0.0/16', launchTime: '2025-08-01T00:00:00Z' },
-  { id: '8', name: 'cdn-distribution', type: 'CloudFront', provider: 'AWS', region: 'global', status: 'running', cpu: 0, memory: 0, cost: 125.00, launchTime: '2025-06-01T00:00:00Z' },
-];
 
 const statusColors: Record<string, 'success' | 'default' | 'warning' | 'error'> = {
   running: 'success',
@@ -48,62 +28,64 @@ const typeIcons: Record<string, React.ReactNode> = {
 };
 
 const CloudResourcesPage: React.FC = () => {
-  const [resources, setResources] = useState<CloudResource[]>(initialResources);
+  const { data: resources, isLoading, refetch } = useListCloudResourcesQuery();
+  const [startResource] = useStartCloudResourceMutation();
+  const [stopResource] = useStopCloudResourceMutation();
+  const [rebootResource] = useRebootCloudResourceMutation();
+
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedResource, setSelectedResource] = useState<CloudResource | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const totalResources = resources.length;
-  const runningResources = resources.filter(r => r.status === 'running').length;
-  const totalCost = resources.reduce((sum, r) => sum + r.cost, 0);
-  const avgCpu = resources.filter(r => r.status === 'running').reduce((sum, r) => sum + r.cpu, 0) / (runningResources || 1);
+  const totalResources = resources?.length || 0;
+  const runningResources = resources?.filter(r => r.status === 'running').length || 0;
+  const totalCost = resources?.reduce((sum, r) => sum + r.cost, 0) || 0;
+  const avgCpu = runningResources > 0
+    ? (resources?.filter(r => r.status === 'running').reduce((sum, r) => sum + r.cpu, 0) || 0) / runningResources
+    : 0;
 
   const handleViewDetails = (resource: CloudResource) => {
     setSelectedResource(resource);
     setIsDetailModalOpen(true);
   };
 
-  const handleStartResource = (resource: CloudResource) => {
+  const handleStartResource = async (resource: CloudResource) => {
     setActionLoading(resource.id);
-    message.loading(`Starting ${resource.name}...`, 2);
-
-    setTimeout(() => {
-      setResources(resources.map(r =>
-        r.id === resource.id ? { ...r, status: 'running', cpu: Math.floor(Math.random() * 30) + 20, memory: Math.floor(Math.random() * 30) + 30 } : r
-      ));
-      setActionLoading(null);
+    try {
+      await startResource(resource.id).unwrap();
       message.success(`${resource.name} started successfully`);
-    }, 2000);
+      refetch();
+    } catch (error) {
+      message.error('Failed to start resource');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleStopResource = (resource: CloudResource) => {
+  const handleStopResource = async (resource: CloudResource) => {
     setActionLoading(resource.id);
-    message.loading(`Stopping ${resource.name}...`, 2);
-
-    setTimeout(() => {
-      setResources(resources.map(r =>
-        r.id === resource.id ? { ...r, status: 'stopped', cpu: 0, memory: 0, cost: 0 } : r
-      ));
-      setActionLoading(null);
+    try {
+      await stopResource(resource.id).unwrap();
       message.success(`${resource.name} stopped`);
-    }, 2000);
+      refetch();
+    } catch (error) {
+      message.error('Failed to stop resource');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleRebootResource = (resource: CloudResource) => {
+  const handleRebootResource = async (resource: CloudResource) => {
     setActionLoading(resource.id);
-    message.loading(`Rebooting ${resource.name}...`, 3);
-
-    setResources(resources.map(r =>
-      r.id === resource.id ? { ...r, status: 'pending' } : r
-    ));
-
-    setTimeout(() => {
-      setResources(resources.map(r =>
-        r.id === resource.id ? { ...r, status: 'running', cpu: Math.floor(Math.random() * 30) + 20, memory: Math.floor(Math.random() * 30) + 30 } : r
-      ));
-      setActionLoading(null);
+    try {
+      await rebootResource(resource.id).unwrap();
       message.success(`${resource.name} rebooted successfully`);
-    }, 3000);
+      refetch();
+    } catch (error) {
+      message.error('Failed to reboot resource');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const columns: ColumnsType<CloudResource> = [
@@ -217,6 +199,10 @@ const CloudResourcesPage: React.FC = () => {
       ),
     },
   ];
+
+  if (isLoading) {
+    return <div style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></div>;
+  }
 
   return (
     <div>

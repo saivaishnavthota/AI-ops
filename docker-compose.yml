@@ -43,7 +43,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-aiops}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-aiops_db}
       - REDIS_URL=redis://redis:6379/0
       # Security - SECRET_KEY is required (no default for security)
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required - generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=15
       - REFRESH_TOKEN_EXPIRE_DAYS=7

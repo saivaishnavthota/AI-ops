@@ -31,8 +31,16 @@ class Organization(BaseModel):
     incidents = relationship("Incident", back_populates="organization", lazy="dynamic")
     alerts = relationship("Alert", back_populates="organization", lazy="dynamic")
     playbooks = relationship("Playbook", back_populates="organization", lazy="dynamic")
+    predictions = relationship("Prediction", back_populates="organization", lazy="dynamic")
+    security_events = relationship("SecurityEvent", back_populates="organization", lazy="dynamic")
+    tickets = relationship("Ticket", back_populates="organization", lazy="dynamic")
+    kb_articles = relationship("KnowledgeBaseArticle", back_populates="organization", lazy="dynamic")
+    investigations = relationship("Investigation", back_populates="organization", lazy="dynamic")
     notifications = relationship("Notification", back_populates="organization", lazy="dynamic")
     audit_logs = relationship("AuditLog", back_populates="organization", lazy="dynamic")
+    conversations = relationship("Conversation", back_populates="organization", lazy="dynamic")
+    virtual_agent_knowledge = relationship("VirtualAgentKnowledge", back_populates="organization", lazy="dynamic")
+    agent_performance = relationship("AgentPerformance", back_populates="organization", lazy="dynamic")
 
     def __repr__(self) -> str:
         return f"<Organization {self.name}>"

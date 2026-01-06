@@ -2,93 +2,15 @@ import React, { useState } from 'react';
 import { Card, Table, Tag, Typography, Space, Button, Avatar, Progress, Modal, Form, Input, Select, message, Drawer, Timeline, Descriptions, Popconfirm } from 'antd';
 import { PlusOutlined, UserOutlined, FileSearchOutlined, EditOutlined, CheckCircleOutlined, LinkOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import {
+  useGetInvestigationsQuery,
+  useCreateInvestigationMutation,
+  useUpdateInvestigationMutation,
+  Investigation,
+} from '../../../store/api/investigationsApi';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
-
-interface Investigation {
-  id: string;
-  title: string;
-  description: string;
-  status: 'active' | 'pending' | 'closed';
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  assignee: string;
-  createdAt: string;
-  eventsLinked: number;
-  progress: number;
-  findings?: string[];
-  timeline?: { date: string; action: string; user: string }[];
-}
-
-const initialInvestigations: Investigation[] = [
-  {
-    id: 'INV-001',
-    title: 'Suspicious API Access Pattern Investigation',
-    description: 'Investigating unusual API call patterns from multiple user accounts',
-    status: 'active',
-    priority: 'high',
-    assignee: 'Alex Chen',
-    createdAt: '2025-12-22T08:00:00Z',
-    eventsLinked: 15,
-    progress: 65,
-    findings: [
-      'Identified 3 user accounts with unusual activity',
-      'API calls originating from unexpected geographic locations',
-      'Pattern suggests automated script usage',
-    ],
-    timeline: [
-      { date: '2025-12-22T08:00:00Z', action: 'Investigation created', user: 'System' },
-      { date: '2025-12-22T09:30:00Z', action: 'Assigned to Alex Chen', user: 'Admin' },
-      { date: '2025-12-22T10:15:00Z', action: 'Initial analysis completed', user: 'Alex Chen' },
-    ],
-  },
-  {
-    id: 'INV-002',
-    title: 'Container Image Vulnerability Assessment',
-    description: 'Analysis of critical CVE detected in production images',
-    status: 'active',
-    priority: 'critical',
-    assignee: 'Sarah Johnson',
-    createdAt: '2025-12-22T09:30:00Z',
-    eventsLinked: 8,
-    progress: 30,
-    findings: [
-      'CVE-2025-1234 confirmed in base image',
-      'Affects 5 production containers',
-    ],
-    timeline: [
-      { date: '2025-12-22T09:30:00Z', action: 'Investigation created', user: 'Security Scanner' },
-      { date: '2025-12-22T10:00:00Z', action: 'Assigned to Sarah Johnson', user: 'Admin' },
-    ],
-  },
-  {
-    id: 'INV-003',
-    title: 'Failed Login Attempts Analysis',
-    description: 'Reviewing pattern of failed authentication attempts',
-    status: 'pending',
-    priority: 'medium',
-    assignee: 'Mike Wilson',
-    createdAt: '2025-12-21T14:00:00Z',
-    eventsLinked: 23,
-    progress: 10,
-  },
-  {
-    id: 'INV-004',
-    title: 'Firewall Rule Change Audit',
-    description: 'Audit of recent security group modifications',
-    status: 'closed',
-    priority: 'low',
-    assignee: 'Emily Davis',
-    createdAt: '2025-12-20T10:00:00Z',
-    eventsLinked: 5,
-    progress: 100,
-    findings: [
-      'All changes were authorized',
-      'Documentation verified',
-      'No security concerns identified',
-    ],
-  },
-];
 
 const statusColors: Record<string, string> = {
   active: 'blue',
@@ -106,7 +28,10 @@ const priorityColors: Record<string, string> = {
 const assigneeOptions = ['Alex Chen', 'Sarah Johnson', 'Mike Wilson', 'Emily Davis', 'John Smith'];
 
 const SecurityInvestigationsPage: React.FC = () => {
-  const [investigations, setInvestigations] = useState<Investigation[]>(initialInvestigations);
+  const { data: investigationsData, isLoading } = useGetInvestigationsQuery({ skip: 0, limit: 100 });
+  const [createInvestigation] = useCreateInvestigationMutation();
+  const [updateInvestigation] = useUpdateInvestigationMutation();
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -114,27 +39,23 @@ const SecurityInvestigationsPage: React.FC = () => {
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
 
-  const handleCreate = () => {
-    form.validateFields().then((values) => {
-      const newInvestigation: Investigation = {
-        id: `INV-${String(Date.now()).slice(-3)}`,
+  const investigations = investigationsData?.items || [];
+
+  const handleCreate = async () => {
+    try {
+      const values = await form.validateFields();
+      await createInvestigation({
         title: values.title,
         description: values.description,
-        status: 'pending',
         priority: values.priority,
-        assignee: values.assignee,
-        createdAt: new Date().toISOString(),
-        eventsLinked: 0,
-        progress: 0,
-        timeline: [
-          { date: new Date().toISOString(), action: 'Investigation created', user: 'Current User' },
-        ],
-      };
-      setInvestigations([newInvestigation, ...investigations]);
-      message.success(`Investigation ${newInvestigation.id} created`);
+        assignee_name: values.assignee,
+      }).unwrap();
+      message.success('Investigation created successfully');
       setIsCreateModalOpen(false);
       form.resetFields();
-    });
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to create investigation');
+    }
   };
 
   const handleViewDetails = (investigation: Investigation) => {
@@ -142,25 +63,46 @@ const SecurityInvestigationsPage: React.FC = () => {
     setIsDetailDrawerOpen(true);
   };
 
-  const handleStartInvestigation = (investigation: Investigation) => {
-    setInvestigations(investigations.map(i =>
-      i.id === investigation.id ? { ...i, status: 'active', progress: Math.max(i.progress, 10) } : i
-    ));
-    message.success(`Investigation ${investigation.id} started`);
+  const handleStartInvestigation = async (investigation: Investigation) => {
+    try {
+      await updateInvestigation({
+        id: investigation.id,
+        data: {
+          status: 'active',
+          progress: Math.max(investigation.progress, 10),
+        },
+      }).unwrap();
+      message.success(`Investigation ${investigation.id.substring(0, 8)} started`);
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to start investigation');
+    }
   };
 
-  const handleCloseInvestigation = (investigation: Investigation) => {
-    setInvestigations(investigations.map(i =>
-      i.id === investigation.id ? { ...i, status: 'closed', progress: 100 } : i
-    ));
-    message.success(`Investigation ${investigation.id} closed`);
+  const handleCloseInvestigation = async (investigation: Investigation) => {
+    try {
+      await updateInvestigation({
+        id: investigation.id,
+        data: {
+          status: 'closed',
+          progress: 100,
+        },
+      }).unwrap();
+      message.success(`Investigation ${investigation.id.substring(0, 8)} closed`);
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to close investigation');
+    }
   };
 
-  const handleUpdateProgress = (investigation: Investigation, newProgress: number) => {
-    setInvestigations(investigations.map(i =>
-      i.id === investigation.id ? { ...i, progress: newProgress } : i
-    ));
-    message.success(`Progress updated to ${newProgress}%`);
+  const handleUpdateProgress = async (investigation: Investigation, newProgress: number) => {
+    try {
+      await updateInvestigation({
+        id: investigation.id,
+        data: { progress: newProgress },
+      }).unwrap();
+      message.success(`Progress updated to ${newProgress}%`);
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to update progress');
+    }
   };
 
   const openEditModal = (investigation: Investigation) => {
@@ -169,23 +111,32 @@ const SecurityInvestigationsPage: React.FC = () => {
       title: investigation.title,
       description: investigation.description,
       priority: investigation.priority,
-      assignee: investigation.assignee,
+      assignee: investigation.assignee_name,
       progress: investigation.progress,
     });
     setIsEditModalOpen(true);
   };
 
-  const handleEdit = () => {
-    editForm.validateFields().then((values) => {
-      setInvestigations(investigations.map(i =>
-        i.id === selectedInvestigation?.id
-          ? { ...i, ...values }
-          : i
-      ));
-      message.success(`Investigation ${selectedInvestigation?.id} updated`);
+  const handleEdit = async () => {
+    if (!selectedInvestigation) return;
+    try {
+      const values = await editForm.validateFields();
+      await updateInvestigation({
+        id: selectedInvestigation.id,
+        data: {
+          title: values.title,
+          description: values.description,
+          priority: values.priority,
+          assignee_name: values.assignee,
+          progress: values.progress,
+        },
+      }).unwrap();
+      message.success('Investigation updated successfully');
       setIsEditModalOpen(false);
       setSelectedInvestigation(null);
-    });
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to update investigation');
+    }
   };
 
   const columns: ColumnsType<Investigation> = [
@@ -193,10 +144,10 @@ const SecurityInvestigationsPage: React.FC = () => {
       title: 'Investigation',
       dataIndex: 'title',
       key: 'title',
-      render: (text, record) => (
+      render: (text: string, record: Investigation) => (
         <div>
           <Space style={{ marginBottom: 4 }}>
-            <Text strong>{record.id}</Text>
+            <Text strong>{record.id.substring(0, 8)}</Text>
             <Tag color={priorityColors[record.priority]}>{record.priority.toUpperCase()}</Tag>
           </Space>
           <div style={{ fontWeight: 500 }}>{text}</div>
@@ -209,16 +160,16 @@ const SecurityInvestigationsPage: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status) => (
+      render: (status: string) => (
         <Tag color={statusColors[status]}>{status.toUpperCase()}</Tag>
       ),
     },
     {
       title: 'Assignee',
-      dataIndex: 'assignee',
-      key: 'assignee',
+      dataIndex: 'assignee_name',
+      key: 'assignee_name',
       width: 150,
-      render: (name) => (
+      render: (name: string) => (
         <Space>
           <Avatar size="small" icon={<UserOutlined />} />
           {name}
@@ -227,8 +178,8 @@ const SecurityInvestigationsPage: React.FC = () => {
     },
     {
       title: 'Events',
-      dataIndex: 'eventsLinked',
-      key: 'eventsLinked',
+      dataIndex: 'events_linked',
+      key: 'events_linked',
       width: 80,
       align: 'center',
     },
@@ -237,7 +188,7 @@ const SecurityInvestigationsPage: React.FC = () => {
       dataIndex: 'progress',
       key: 'progress',
       width: 150,
-      render: (progress) => (
+      render: (progress: number) => (
         <Progress
           percent={progress}
           size="small"
@@ -247,16 +198,16 @@ const SecurityInvestigationsPage: React.FC = () => {
     },
     {
       title: 'Created',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
+      dataIndex: 'created_at',
+      key: 'created_at',
       width: 140,
-      render: (date) => new Date(date).toLocaleDateString(),
+      render: (date: string) => new Date(date).toLocaleDateString(),
     },
     {
       title: 'Actions',
       key: 'actions',
       width: 180,
-      render: (_, record) => (
+      render: (_: any, record: Investigation) => (
         <Space>
           <Button
             type="text"
@@ -309,6 +260,7 @@ const SecurityInvestigationsPage: React.FC = () => {
           columns={columns}
           dataSource={investigations}
           rowKey="id"
+          loading={isLoading}
           pagination={{ pageSize: 10 }}
         />
       </Card>
@@ -346,7 +298,7 @@ const SecurityInvestigationsPage: React.FC = () => {
 
       {/* Edit Modal */}
       <Modal
-        title={`Edit Investigation: ${selectedInvestigation?.id}`}
+        title={`Edit Investigation: ${selectedInvestigation?.id.substring(0, 8)}`}
         open={isEditModalOpen}
         onOk={handleEdit}
         onCancel={() => { setIsEditModalOpen(false); setSelectedInvestigation(null); }}
@@ -380,7 +332,7 @@ const SecurityInvestigationsPage: React.FC = () => {
 
       {/* Detail Drawer */}
       <Drawer
-        title={`Investigation: ${selectedInvestigation?.id}`}
+        title={`Investigation: ${selectedInvestigation?.id.substring(0, 8)}`}
         open={isDetailDrawerOpen}
         onClose={() => { setIsDetailDrawerOpen(false); setSelectedInvestigation(null); }}
         width={600}
@@ -408,11 +360,11 @@ const SecurityInvestigationsPage: React.FC = () => {
                 <Tag color={priorityColors[selectedInvestigation.priority]}>{selectedInvestigation.priority.toUpperCase()}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Assignee">
-                <Space><Avatar size="small" icon={<UserOutlined />} />{selectedInvestigation.assignee}</Space>
+                <Space><Avatar size="small" icon={<UserOutlined />} />{selectedInvestigation.assignee_name}</Space>
               </Descriptions.Item>
               <Descriptions.Item label="Events Linked">
                 <Button type="link" icon={<LinkOutlined />} style={{ padding: 0 }}>
-                  {selectedInvestigation.eventsLinked} events
+                  {selectedInvestigation.events_linked} events
                 </Button>
               </Descriptions.Item>
               <Descriptions.Item label="Progress">
@@ -424,7 +376,7 @@ const SecurityInvestigationsPage: React.FC = () => {
               <Paragraph>{selectedInvestigation.description}</Paragraph>
             </Card>
 
-            {selectedInvestigation.findings && (
+            {selectedInvestigation.findings && selectedInvestigation.findings.length > 0 && (
               <Card title="Findings" size="small">
                 <ul style={{ paddingLeft: 20, margin: 0 }}>
                   {selectedInvestigation.findings.map((f, i) => (
@@ -434,7 +386,7 @@ const SecurityInvestigationsPage: React.FC = () => {
               </Card>
             )}
 
-            {selectedInvestigation.timeline && (
+            {selectedInvestigation.timeline && selectedInvestigation.timeline.length > 0 && (
               <Card title="Investigation Timeline" size="small">
                 <Timeline
                   items={selectedInvestigation.timeline.map(t => ({

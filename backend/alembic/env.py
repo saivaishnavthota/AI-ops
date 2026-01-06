@@ -22,13 +22,17 @@ from app.models.team import Team, TeamMember
 from app.models.incident import Incident, IncidentComment, IncidentTimeline
 from app.models.alert import Alert, AlertCorrelation, AlertSource
 from app.models.playbook import Playbook, PlaybookExecution, PlaybookStep
+from app.models.prediction import Prediction
+from app.models.security import SecurityEvent
+from app.models.ticket import Ticket, KnowledgeBaseArticle
+from app.models.investigation import Investigation
 from app.models.audit import AuditLog
 
 # Alembic Config object
 config = context.config
 
 # Override sqlalchemy.url with settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("+asyncpg", ""))
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("+asyncpg", "+psycopg2"))
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
@@ -70,25 +74,20 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
-    """
-    Run migrations in 'online' mode using async engine.
-    """
-    connectable = async_engine_from_config(
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode using sync engine."""
+    from sqlalchemy import engine_from_config
+    
+    connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
 
-    await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    connectable.dispose()
 
 
 if context.is_offline_mode():
