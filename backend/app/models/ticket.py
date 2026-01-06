@@ -98,6 +98,13 @@ class KnowledgeBaseArticle(BaseModel):
         nullable=True,
     )
     
+    # Source ticket (if created from ticket resolution)
+    source_ticket_id = Column(
+        GUID(),
+        ForeignKey("tickets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    
     # Publishing
     is_published = Column(Boolean, default=True)
 

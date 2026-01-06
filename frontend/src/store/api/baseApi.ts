@@ -71,3 +71,6 @@ export const baseApi = createApi({
   tagTypes: ['User', 'Incident', 'Alert', 'Team', 'Teams', 'Organization', 'Playbook', 'Playbooks', 'Predictions', 'SecurityEvents', 'Tickets', 'KBArticles', 'Investigations', 'AuditLogs', 'CloudResource', 'CloudCost', 'CloudOptimization'],
   endpoints: () => ({}),
 });
+
+// Export baseQuery for use in other API files
+export { baseQuery };

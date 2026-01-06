@@ -19,6 +19,20 @@ export interface User {
   updated_at: string;
 }
 
+export interface AssignableUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  job_title: string | null;
+  teams: Array<{
+    team_name: string;
+    team_type: string;
+    role: string;
+  }>;
+  display_name: string;
+}
+
 interface PaginatedResponse<T> {
   items: T[];
   total: number;
@@ -65,10 +79,15 @@ export const usersApi = baseApi.injectEndpoints({
       providesTags: (result) =>
         result
           ? [
-              ...result.items.map(({ id }) => ({ type: 'User' as const, id })),
-              { type: 'User', id: 'LIST' },
-            ]
+            ...result.items.map(({ id }) => ({ type: 'User' as const, id })),
+            { type: 'User', id: 'LIST' },
+          ]
           : [{ type: 'User', id: 'LIST' }],
+    }),
+
+    getAssignableUsers: builder.query<AssignableUser[], void>({
+      query: () => '/users/assignable',
+      providesTags: [{ type: 'User', id: 'ASSIGNABLE' }],
     }),
 
     getUser: builder.query<User, string>({
@@ -146,6 +165,7 @@ export const usersApi = baseApi.injectEndpoints({
 
 export const {
   useListUsersQuery,
+  useGetAssignableUsersQuery,
   useGetUserQuery,
   useCreateUserMutation,
   useUpdateUserMutation,

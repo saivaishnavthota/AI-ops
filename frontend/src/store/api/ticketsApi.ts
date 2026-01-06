@@ -33,6 +33,16 @@ export interface TicketUpdateRequest {
     comments?: Array<{ user: string; text: string; time: string }>;
 }
 
+export interface TicketAssignRequest {
+    assignee_id: string;
+}
+
+export interface TicketResolveRequest {
+    title?: string;
+    content?: string;
+    tags?: string[];
+}
+
 export interface KnowledgeBaseArticle {
     id: string;
     organization_id: string;
@@ -95,6 +105,22 @@ export const ticketsApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: (_result, _error, { id }) => ['Tickets', { type: 'Tickets', id }],
         }),
+        assignTicket: builder.mutation<Ticket, { id: string; data: TicketAssignRequest }>({
+            query: ({ id, data }) => ({
+                url: `/tickets/${id}/assign`,
+                method: 'PUT',
+                body: data,
+            }),
+            invalidatesTags: (_result, _error, { id }) => ['Tickets', { type: 'Tickets', id }],
+        }),
+        resolveTicketWithFeedback: builder.mutation<Ticket, { id: string; feedback: TicketResolveRequest }>({
+            query: ({ id, feedback }) => ({
+                url: `/tickets/${id}/resolve`,
+                method: 'PUT',
+                body: feedback,
+            }),
+            invalidatesTags: (_result, _error, { id }) => ['Tickets', { type: 'Tickets', id }, 'KBArticles'],
+        }),
         deleteTicket: builder.mutation<void, string>({
             query: (id) => ({
                 url: `/tickets/${id}`,
@@ -151,6 +177,8 @@ export const {
     useGetTicketQuery,
     useCreateTicketMutation,
     useUpdateTicketMutation,
+    useAssignTicketMutation,
+    useResolveTicketWithFeedbackMutation,
     useDeleteTicketMutation,
     useGetKBArticlesQuery,
     useGetKBArticleQuery,

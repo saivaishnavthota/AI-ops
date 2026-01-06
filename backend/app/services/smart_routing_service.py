@@ -387,9 +387,22 @@ Respond with JSON:
         category: str,
         skills_needed: List[str]
     ) -> List[User]:
-        """Get available agents who can handle the request."""
+        """Get available agents who can handle the request, prioritizing team members."""
         
-        # Get agents (operators and admins)
+        # First, try to get agents from category-specific teams
+        team_agents = await self._get_team_agents_for_category(organization_id, category)
+        
+        if team_agents:
+            # Filter to active agents with appropriate roles
+            qualified_team_agents = [
+                agent for agent in team_agents 
+                if agent.is_active and agent.role in [UserRole.OPERATOR.value, UserRole.ADMIN.value]
+            ]
+            
+            if qualified_team_agents:
+                return qualified_team_agents
+        
+        # Fallback to all available agents if no team-specific agents found
         result = await self.db.execute(
             select(User).where(
                 and_(
@@ -400,36 +413,100 @@ Respond with JSON:
             )
         )
         
-        agents = result.scalars().all()
+        return result.scalars().all()
+
+    async def _get_team_agents_for_category(
+        self,
+        organization_id: UUID,
+        category: str
+    ) -> List[User]:
+        """Get agents from teams that match the ticket category."""
         
-        # Filter by team membership if category-specific teams exist
-        if category in ["infrastructure", "security", "operations"]:
-            # Get team members for relevant teams
-            team_result = await self.db.execute(
-                select(Team).where(
-                    and_(
-                        Team.organization_id == organization_id,
-                        Team.team_type == category,
-                        Team.is_active == True
-                    )
+        # Category to team type mapping
+        category_team_mapping = {
+            "infrastructure": ["infrastructure", "devops"],
+            "application": ["devops", "application"],
+            "security": ["security"],
+            "network": ["infrastructure", "network"],
+            "database": ["operations", "database"],
+            "authentication": ["security", "operations"],
+            "access": ["security", "operations"],
+            "hardware": ["infrastructure", "operations"],
+            "email": ["operations", "infrastructure"],
+            "general": ["operations", "devops"]
+        }
+        
+        # Get team types for this category
+        team_types = category_team_mapping.get(category.lower(), ["operations"])
+        
+        # Find teams that match these types
+        teams_result = await self.db.execute(
+            select(Team).where(
+                and_(
+                    Team.organization_id == organization_id,
+                    Team.team_type.in_(team_types),
+                    Team.is_active == True
                 )
             )
-            teams = team_result.scalars().all()
+        )
+        teams = teams_result.scalars().all()
+        
+        if not teams:
+            # Fallback: try to find teams by name matching
+            name_patterns = {
+                "infrastructure": ["infrastructure", "infra", "system"],
+                "application": ["application", "app", "dev", "development"],
+                "security": ["security", "sec"],
+                "network": ["network", "net"],
+                "database": ["database", "db", "data"],
+                "authentication": ["security", "auth"],
+                "access": ["security", "access"],
+                "hardware": ["infrastructure", "hardware", "hw"],
+                "email": ["operations", "ops", "email"],
+                "general": ["operations", "support", "help"]
+            }
             
-            if teams:
-                team_ids = [team.id for team in teams]
-                member_result = await self.db.execute(
-                    select(TeamMember).where(
-                        TeamMember.team_id.in_(team_ids)
+            patterns = name_patterns.get(category.lower(), ["operations", "support"])
+            
+            # Search by team name containing these patterns
+            name_conditions = []
+            for pattern in patterns:
+                name_conditions.append(Team.name.ilike(f"%{pattern}%"))
+            
+            if name_conditions:
+                teams_result = await self.db.execute(
+                    select(Team).where(
+                        and_(
+                            Team.organization_id == organization_id,
+                            Team.is_active == True,
+                            or_(*name_conditions)
+                        )
                     )
                 )
-                members = member_result.scalars().all()
-                team_agent_ids = [member.user_id for member in members]
-                
-                # Filter agents to team members
-                agents = [agent for agent in agents if agent.id in team_agent_ids]
+                teams = teams_result.scalars().all()
         
-        return agents
+        if not teams:
+            return []
+        
+        # Get team members from matching teams
+        team_ids = [team.id for team in teams]
+        members_result = await self.db.execute(
+            select(TeamMember).where(
+                TeamMember.team_id.in_(team_ids)
+            )
+        )
+        members = members_result.scalars().all()
+        
+        if not members:
+            return []
+        
+        # Get user objects for team members
+        user_ids = [member.user_id for member in members]
+        users_result = await self.db.execute(
+            select(User).where(User.id.in_(user_ids))
+        )
+        
+        return users_result.scalars().all()
 
     async def _score_agent_for_ticket(
         self,
@@ -437,7 +514,7 @@ Respond with JSON:
         ticket: Ticket,
         requirements: Dict[str, Any]
     ) -> AgentScore:
-        """Score an agent's suitability for a ticket."""
+        """Score an agent's suitability for a ticket with enhanced team-based logic."""
         
         # Get agent's current workload
         workload_result = await self.db.execute(
@@ -452,6 +529,11 @@ Respond with JSON:
         
         # Get agent performance metrics
         performance_score = await self._get_agent_performance_score(agent.id)
+        
+        # Calculate team specialization bonus
+        team_specialization_score = await self._calculate_team_specialization_score(
+            agent, requirements["category"]
+        )
         
         # Calculate skill match
         skill_match = await self._calculate_skill_match(
@@ -470,15 +552,21 @@ Respond with JSON:
             requirements["complexity"]
         )
         
-        # Combine scores
+        # Enhanced scoring with team specialization
         total_score = (
-            skill_match * 0.4 +
-            availability_score * 0.3 +
-            performance_score * 0.2 +
-            priority_match * 0.1
+            skill_match * 0.25 +
+            availability_score * 0.25 +
+            performance_score * 0.15 +
+            priority_match * 0.10 +
+            team_specialization_score * 0.25  # New: Team specialization bonus
         )
         
-        reasoning = f"Skill match: {skill_match:.2f}, Availability: {availability_score:.2f}, Performance: {performance_score:.2f}"
+        reasoning = (
+            f"Team specialization: {team_specialization_score:.2f}, "
+            f"Skill match: {skill_match:.2f}, "
+            f"Availability: {availability_score:.2f}, "
+            f"Performance: {performance_score:.2f}"
+        )
         
         return AgentScore(
             agent_id=agent.id,
@@ -490,6 +578,134 @@ Respond with JSON:
             skill_match=skill_match,
             performance_score=performance_score
         )
+
+    async def _calculate_team_specialization_score(
+        self,
+        agent: User,
+        category: str
+    ) -> float:
+        """Calculate bonus score based on agent's team specialization for the category."""
+        
+        # Get agent's team memberships
+        memberships_result = await self.db.execute(
+            select(TeamMember).where(TeamMember.user_id == agent.id)
+        )
+        memberships = memberships_result.scalars().all()
+        
+        if not memberships:
+            return 0.5  # Default score for agents not in any team
+        
+        # Get teams for these memberships
+        team_ids = [membership.team_id for membership in memberships]
+        teams_result = await self.db.execute(
+            select(Team).where(Team.id.in_(team_ids))
+        )
+        teams = teams_result.scalars().all()
+        
+        # Category to team specialization mapping
+        specialization_mapping = {
+            "infrastructure": {
+                "infrastructure": 1.0,
+                "devops": 0.8,
+                "operations": 0.7,
+                "security": 0.3
+            },
+            "application": {
+                "devops": 1.0,
+                "infrastructure": 0.6,
+                "operations": 0.5,
+                "security": 0.3
+            },
+            "security": {
+                "security": 1.0,
+                "operations": 0.4,
+                "infrastructure": 0.3,
+                "devops": 0.2
+            },
+            "network": {
+                "infrastructure": 1.0,
+                "devops": 0.6,
+                "operations": 0.5,
+                "security": 0.4
+            },
+            "database": {
+                "operations": 1.0,
+                "infrastructure": 0.7,
+                "devops": 0.6,
+                "security": 0.3
+            },
+            "authentication": {
+                "security": 1.0,
+                "operations": 0.7,
+                "infrastructure": 0.4,
+                "devops": 0.3
+            },
+            "access": {
+                "security": 1.0,
+                "operations": 0.8,
+                "infrastructure": 0.4,
+                "devops": 0.3
+            },
+            "hardware": {
+                "infrastructure": 1.0,
+                "operations": 0.8,
+                "devops": 0.4,
+                "security": 0.2
+            },
+            "email": {
+                "operations": 1.0,
+                "infrastructure": 0.7,
+                "devops": 0.5,
+                "security": 0.4
+            }
+        }
+        
+        category_mapping = specialization_mapping.get(category.lower(), {})
+        
+        # Calculate best specialization score from agent's teams
+        best_score = 0.0
+        best_team = None
+        
+        for team in teams:
+            team_type = team.team_type.lower() if team.team_type else "general"
+            
+            # Direct team type match
+            if team_type in category_mapping:
+                score = category_mapping[team_type]
+                if score > best_score:
+                    best_score = score
+                    best_team = team.name
+            
+            # Team name-based matching as fallback
+            elif not best_score:
+                team_name = team.name.lower()
+                name_bonus = 0.0
+                
+                if category.lower() in team_name:
+                    name_bonus = 0.9
+                elif any(keyword in team_name for keyword in ["infrastructure", "infra"] if category.lower() == "infrastructure"):
+                    name_bonus = 0.8
+                elif any(keyword in team_name for keyword in ["security", "sec"] if category.lower() == "security"):
+                    name_bonus = 0.8
+                elif any(keyword in team_name for keyword in ["application", "app", "dev"] if category.lower() == "application"):
+                    name_bonus = 0.8
+                elif any(keyword in team_name for keyword in ["operations", "ops", "support"] if category.lower() in ["database", "email", "general"]):
+                    name_bonus = 0.7
+                
+                if name_bonus > best_score:
+                    best_score = name_bonus
+                    best_team = team.name
+        
+        # Role-based bonus for team leads
+        role_bonus = 0.0
+        for membership in memberships:
+            if membership.role == "lead":
+                role_bonus = 0.1
+                break
+        
+        final_score = min(1.0, best_score + role_bonus)
+        
+        return final_score if final_score > 0 else 0.5  # Minimum score for general agents
 
     async def _score_agent_for_conversation(
         self,
@@ -658,6 +874,74 @@ Respond with JSON:
         
         return team_mapping.get(category)
 
+    async def auto_assign_ticket_if_confident(
+        self,
+        ticket_id: UUID,
+        confidence_threshold: float = 0.85
+    ) -> Dict[str, Any]:
+        """
+        Automatically assign ticket if routing confidence is high enough.
+        
+        Args:
+            ticket_id: ID of the ticket to potentially auto-assign
+            confidence_threshold: Minimum confidence required for auto-assignment
+            
+        Returns:
+            Dict with assignment result and details
+        """
+        
+        # Get routing recommendation
+        recommendation = await self.route_ticket(ticket_id)
+        
+        result = {
+            "ticket_id": str(ticket_id),
+            "auto_assigned": False,
+            "confidence": recommendation.confidence,
+            "threshold": confidence_threshold,
+            "reasoning": recommendation.reasoning
+        }
+        
+        # Check if we should auto-assign
+        if (recommendation.recommended_agent and 
+            recommendation.confidence >= confidence_threshold and
+            not recommendation.escalation_needed and
+            recommendation.recommended_agent.current_workload < 5):  # Don't overload agents
+            
+            # Perform auto-assignment
+            success = await self.assign_ticket(
+                ticket_id=ticket_id,
+                agent_id=recommendation.recommended_agent.agent_id,
+                assigned_by_id=None  # System assignment
+            )
+            
+            if success:
+                result.update({
+                    "auto_assigned": True,
+                    "assigned_agent": {
+                        "id": str(recommendation.recommended_agent.agent_id),
+                        "name": recommendation.recommended_agent.agent_name,
+                        "score": recommendation.recommended_agent.score,
+                        "availability": recommendation.recommended_agent.availability
+                    }
+                })
+            else:
+                result["error"] = "Assignment failed"
+        else:
+            # Explain why auto-assignment didn't happen
+            reasons = []
+            if not recommendation.recommended_agent:
+                reasons.append("no suitable agent found")
+            if recommendation.confidence < confidence_threshold:
+                reasons.append(f"confidence too low ({recommendation.confidence:.2f} < {confidence_threshold})")
+            if recommendation.escalation_needed:
+                reasons.append("escalation required")
+            if recommendation.recommended_agent and recommendation.recommended_agent.current_workload >= 5:
+                reasons.append("agent workload too high")
+            
+            result["skip_reason"] = ", ".join(reasons)
+        
+        return result
+
     def _generate_routing_reasoning(
         self,
         recommended_agent: Optional[AgentScore],
@@ -674,7 +958,7 @@ Respond with JSON:
         
         return (
             f"Recommended {recommended_agent.agent_name} based on "
-            f"skill match ({recommended_agent.skill_match:.1%}), "
+            f"team specialization, skill match ({recommended_agent.skill_match:.1%}), "
             f"availability ({recommended_agent.availability}), "
             f"and performance history"
         )

@@ -1,13 +1,15 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, update, delete, func
 from typing import Optional, Dict, Any, List
 from uuid import UUID
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.api.v1.deps import CurrentUser, DBSession
 from app.models import Ticket, KnowledgeBaseArticle, User
 from app.models.user import UserRole
+from app.models.team import Team, TeamMember
 from app.schemas.ticket import (
     TicketCreate,
     TicketUpdate,
@@ -22,8 +24,63 @@ from app.services.virtual_agent_service import VirtualAgentService
 from app.services.smart_routing_service import SmartRoutingService
 from app.services.proactive_support_service import ProactiveSupportService
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/tickets", tags=["Service Desk"])
 kb_router = APIRouter(prefix="/knowledge-base", tags=["Knowledge Base"])
+users_router = APIRouter(prefix="/users", tags=["Users"])
+
+
+# User endpoints for ticket assignment
+@users_router.get("/assignable", response_model=List[Dict[str, Any]])
+async def get_assignable_users(
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Get list of users who can be assigned tickets (operators and admins)."""
+    
+    # Get all active users with operator or admin roles
+    result = await db.execute(
+        select(User).where(
+            User.organization_id == current_user.organization_id,
+            User.is_active == True,
+            User.role.in_([UserRole.OPERATOR.value, UserRole.ADMIN.value])
+        ).order_by(User.first_name, User.last_name)
+    )
+    users = result.scalars().all()
+    
+    # Get team memberships for each user
+    team_memberships_result = await db.execute(
+        select(TeamMember, Team).join(Team).where(
+            TeamMember.user_id.in_([user.id for user in users])
+        )
+    )
+    team_memberships = team_memberships_result.all()
+    
+    # Create user data with team information
+    assignable_users = []
+    for user in users:
+        # Find user's teams
+        user_teams = []
+        for membership, team in team_memberships:
+            if membership.user_id == user.id:
+                user_teams.append({
+                    "team_name": team.name,
+                    "team_type": team.team_type,
+                    "role": membership.role
+                })
+        
+        assignable_users.append({
+            "id": str(user.id),
+            "name": user.full_name,
+            "email": user.email,
+            "role": user.role,
+            "job_title": user.job_title,
+            "teams": user_teams,
+            "display_name": f"{user.full_name} ({user.job_title or user.role})"
+        })
+    
+    return assignable_users
 
 
 # Ticket endpoints
@@ -35,10 +92,25 @@ async def list_tickets(
     limit: int = Query(100, ge=1, le=100),
     status: Optional[str] = None,
     priority: Optional[str] = None,
+    assigned_only: bool = Query(False, description="Show only tickets assigned to current user"),
 ):
-    """List all tickets for the organization."""
+    """List tickets for the organization. Operators see only assigned tickets by default."""
     query = select(Ticket).where(
         Ticket.organization_id == current_user.organization_id
+    )
+    
+    # For operators, show only assigned tickets by default (unless admin overrides)
+    if current_user.role == UserRole.OPERATOR.value and not current_user.role == UserRole.ADMIN.value:
+        query = query.where(Ticket.assignee_id == current_user.id)
+    elif assigned_only:
+        query = query.where(Ticket.assignee_id == current_user.id)
+    
+    # Exclude tickets that should be moved to incidents (resolved > 1 day ago)
+    one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
+    query = query.where(
+        (Ticket.status != "resolved") | 
+        (Ticket.resolved_at.is_(None)) |
+        (Ticket.resolved_at > one_day_ago)
     )
     
     if status:
@@ -46,12 +118,28 @@ async def list_tickets(
     if priority:
         query = query.where(Ticket.priority == priority)
     
-    # Get total count
-    count_result = await db.execute(
-        select(func.count(Ticket.id)).where(
-            Ticket.organization_id == current_user.organization_id
-        )
+    # Get total count with same filters
+    count_query = select(func.count(Ticket.id)).where(
+        Ticket.organization_id == current_user.organization_id
     )
+    
+    if current_user.role == UserRole.OPERATOR.value and not current_user.role == UserRole.ADMIN.value:
+        count_query = count_query.where(Ticket.assignee_id == current_user.id)
+    elif assigned_only:
+        count_query = count_query.where(Ticket.assignee_id == current_user.id)
+        
+    count_query = count_query.where(
+        (Ticket.status != "resolved") | 
+        (Ticket.resolved_at.is_(None)) |
+        (Ticket.resolved_at > one_day_ago)
+    )
+    
+    if status:
+        count_query = count_query.where(Ticket.status == status)
+    if priority:
+        count_query = count_query.where(Ticket.priority == priority)
+    
+    count_result = await db.execute(count_query)
     total = count_result.scalar()
     
     # Get tickets with pagination
@@ -168,7 +256,421 @@ async def update_ticket(
     return ticket
 
 
+@router.put("/{ticket_id}/resolve", response_model=TicketResponse)
+async def resolve_ticket_with_feedback(
+    ticket_id: UUID,
+    feedback_data: Dict[str, Any],
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Resolve a ticket and create knowledge base article from feedback."""
+    
+    # Get the ticket
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.id == ticket_id,
+            Ticket.organization_id == current_user.organization_id,
+        )
+    )
+    ticket = result.scalar_one_or_none()
+    
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found",
+        )
+    
+    # Check if user can resolve this ticket (assigned to them or admin)
+    if (ticket.assignee_id != current_user.id and 
+        current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only resolve tickets assigned to you",
+        )
+    
+    # Update ticket status
+    ticket.status = "resolved"
+    ticket.resolved_at = datetime.now(timezone.utc)
+    
+    # Add resolution comment
+    resolution_comment = {
+        "user": current_user.full_name,
+        "text": f"Ticket resolved by {current_user.full_name}",
+        "time": datetime.now(timezone.utc).isoformat(),
+        "resolution": True
+    }
+    
+    if not ticket.comments:
+        ticket.comments = []
+    ticket.comments.append(resolution_comment)
+    
+    # Create knowledge base article from feedback if provided
+    feedback_title = feedback_data.get("title", "")
+    feedback_content = feedback_data.get("content", "")
+    feedback_tags = feedback_data.get("tags", [])
+    
+    if feedback_title and feedback_content:
+        # Create knowledge base article
+        kb_article = KnowledgeBaseArticle(
+            organization_id=current_user.organization_id,
+            author_id=current_user.id,
+            title=feedback_title,
+            content=feedback_content,
+            excerpt=feedback_content[:200] + "..." if len(feedback_content) > 200 else feedback_content,
+            category=ticket.category,
+            tags=feedback_tags,
+            views=0,
+            helpful_count=0,
+            is_published=True,
+        )
+        db.add(kb_article)
+        
+        # Add feedback comment to ticket
+        feedback_comment = {
+            "user": current_user.full_name,
+            "text": f"Knowledge shared: Created KB article '{feedback_title}'",
+            "time": datetime.now(timezone.utc).isoformat(),
+            "knowledge_shared": True,
+            "kb_article_id": str(kb_article.id)
+        }
+        ticket.comments.append(feedback_comment)
+    
+    await db.commit()
+    await db.refresh(ticket)
+    
+    return ticket
+
+
+@router.get("/resolved-old", response_model=TicketListResponse)
+async def get_old_resolved_tickets(
+    db: DBSession,
+    current_user: CurrentUser,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+):
+    """Get resolved tickets older than 1 day (should be moved to incidents)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+    
+    one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
+    
+    query = select(Ticket).where(
+        Ticket.organization_id == current_user.organization_id,
+        Ticket.status == "resolved",
+        Ticket.resolved_at <= one_day_ago
+    )
+    
+    # Get total count
+    count_result = await db.execute(
+        select(func.count(Ticket.id)).where(
+            Ticket.organization_id == current_user.organization_id,
+            Ticket.status == "resolved",
+            Ticket.resolved_at <= one_day_ago
+        )
+    )
+    total = count_result.scalar()
+    
+    # Get tickets with pagination
+    result = await db.execute(
+        query.order_by(desc(Ticket.resolved_at)).offset(skip).limit(limit)
+    )
+    tickets = result.scalars().all()
+    
+    # Calculate pagination fields
+    page = (skip // limit) + 1
+    pages = (total + limit - 1) // limit
+    
+    return {
+        "items": tickets,
+        "total": total,
+        "page": page,
+        "page_size": limit,
+        "pages": pages,
+    }
+
+
+@router.put("/{ticket_id}/assign", response_model=TicketResponse)
+async def assign_ticket_to_user(
+    ticket_id: UUID,
+    assignment_data: Dict[str, Any],
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Assign a ticket to a specific user."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to assign tickets",
+        )
+    
+    # Get the ticket
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.id == ticket_id,
+            Ticket.organization_id == current_user.organization_id,
+        )
+    )
+    ticket = result.scalar_one_or_none()
+    
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found",
+        )
+    
+    # Get the assignee user
+    assignee_id = assignment_data.get("assignee_id")
+    if not assignee_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Assignee ID is required",
+        )
+    
+    assignee_result = await db.execute(
+        select(User).where(
+            User.id == assignee_id,
+            User.organization_id == current_user.organization_id,
+            User.is_active == True,
+            User.role.in_([UserRole.OPERATOR.value, UserRole.ADMIN.value])
+        )
+    )
+    assignee = assignee_result.scalar_one_or_none()
+    
+    if not assignee:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assignee not found or not eligible for ticket assignment",
+        )
+    
+    # Update ticket assignment
+    old_assignee = ticket.assignee_name
+    ticket.assignee_id = assignee.id
+    ticket.assignee_name = assignee.full_name
+    ticket.status = "in_progress"  # Change status when assigned
+    
+    # Add assignment comment
+    assignment_comment = {
+        "user": current_user.full_name,
+        "text": f"Ticket assigned to {assignee.full_name}" + (f" (previously: {old_assignee})" if old_assignee else ""),
+        "time": datetime.now(timezone.utc).isoformat(),
+        "assignment": True,
+        "assigned_by": current_user.full_name,
+        "assigned_to": assignee.full_name
+    }
+    
+    if not ticket.comments:
+        ticket.comments = []
+    ticket.comments.append(assignment_comment)
+    
+    await db.commit()
+    await db.refresh(ticket)
+    
+    return ticket
+
+
+@router.post("/migrate-to-incidents")
+async def migrate_old_tickets_to_incidents(
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Manually trigger migration of old resolved tickets to incidents."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+    
+    try:
+        # Import the migration function
+        from ..tasks.ticket_migration import migrate_old_resolved_tickets
+        
+        migrated_count = await migrate_old_resolved_tickets()
+        
+        return {
+            "success": True,
+            "migrated_count": migrated_count,
+            "message": f"Successfully migrated {migrated_count} resolved tickets to incidents"
+        }
+        
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Migration failed: {str(e)}"
+        )
+
+
 @router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_ticket(
+    ticket_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Delete a ticket."""
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.id == ticket_id,
+            Ticket.organization_id == current_user.organization_id,
+        )
+    )
+    ticket = result.scalar_one_or_none()
+    
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found",
+        )
+    
+    await db.execute(delete(Ticket).where(Ticket.id == ticket_id))
+    await db.commit()
+
+
+@router.put("/{ticket_id}/resolve", response_model=TicketResponse)
+async def resolve_ticket_with_feedback(
+    ticket_id: UUID,
+    feedback_data: Dict[str, Any],
+    db: DBSession,
+    current_user: CurrentUser,
+):
+    """Resolve a ticket and create knowledge base article from feedback."""
+    
+    # Get the ticket
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.id == ticket_id,
+            Ticket.organization_id == current_user.organization_id,
+        )
+    )
+    ticket = result.scalar_one_or_none()
+    
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found",
+        )
+    
+    # Check if user can resolve this ticket (assigned to them or admin)
+    if (ticket.assignee_id != current_user.id and 
+        current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only resolve tickets assigned to you",
+        )
+    
+    # Update ticket status
+    ticket.status = "resolved"
+    ticket.resolved_at = datetime.now(timezone.utc)
+    
+    # Add resolution comment
+    resolution_comment = {
+        "user": current_user.full_name,
+        "text": f"Ticket resolved by {current_user.full_name}",
+        "time": datetime.now(timezone.utc).isoformat(),
+        "resolution": True
+    }
+    
+    if not ticket.comments:
+        ticket.comments = []
+    ticket.comments.append(resolution_comment)
+    
+    # Create knowledge base article from feedback if provided
+    feedback_title = feedback_data.get("title", "")
+    feedback_content = feedback_data.get("content", "")
+    feedback_tags = feedback_data.get("tags", [])
+    
+    if feedback_title and feedback_content:
+        # Create knowledge base article
+        kb_article = KnowledgeBaseArticle(
+            organization_id=current_user.organization_id,
+            author_id=current_user.id,
+            title=feedback_title,
+            content=feedback_content,
+            excerpt=feedback_content[:200] + "..." if len(feedback_content) > 200 else feedback_content,
+            category=ticket.category,
+            tags=feedback_tags,
+            views=0,
+            helpful_count=0,
+            is_published=True,
+            source_ticket_id=ticket_id,  # Link back to original ticket
+        )
+        db.add(kb_article)
+        
+        # Add feedback comment to ticket
+        feedback_comment = {
+            "user": current_user.full_name,
+            "text": f"Knowledge shared: Created KB article '{feedback_title}'",
+            "time": datetime.now(timezone.utc).isoformat(),
+            "knowledge_shared": True,
+            "kb_article_id": str(kb_article.id)
+        }
+        ticket.comments.append(feedback_comment)
+    
+    await db.commit()
+    await db.refresh(ticket)
+    
+    return ticket
+
+
+@router.get("/resolved-old", response_model=TicketListResponse)
+async def get_old_resolved_tickets(
+    db: DBSession,
+    current_user: CurrentUser,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=100),
+):
+    """Get resolved tickets older than 1 day (should be moved to incidents)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
+    
+    one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
+    
+    query = select(Ticket).where(
+        Ticket.organization_id == current_user.organization_id,
+        Ticket.status == "resolved",
+        Ticket.resolved_at <= one_day_ago
+    )
+    
+    # Get total count
+    count_result = await db.execute(
+        select(func.count(Ticket.id)).where(
+            Ticket.organization_id == current_user.organization_id,
+            Ticket.status == "resolved",
+            Ticket.resolved_at <= one_day_ago
+        )
+    )
+    total = count_result.scalar()
+    
+    # Get tickets with pagination
+    result = await db.execute(
+        query.order_by(desc(Ticket.resolved_at)).offset(skip).limit(limit)
+    )
+    tickets = result.scalars().all()
+    
+    # Calculate pagination fields
+    page = (skip // limit) + 1
+    pages = (total + limit - 1) // limit
+    
+    return {
+        "items": tickets,
+        "total": total,
+        "page": page,
+        "page_size": limit,
+        "pages": pages,
+    }
 async def delete_ticket(
     ticket_id: UUID,
     db: DBSession,
@@ -836,26 +1338,83 @@ async def _enhance_ticket_with_ai(
                             "ai_classification": {
                                 "intent": intent_result.intent,
                                 "category": intent_result.category,
-                                "confidence": intent_result.confidence
+                                "confidence": intent_result.confidence,
+                                "keywords": intent_result.keywords
                             }
                         }
                         ticket.comments.append(ai_comment)
             
             if auto_route:
                 async with SmartRoutingService(db) as routing_service:
-                    # Get routing recommendation
-                    recommendation = await routing_service.route_ticket(ticket_id)
+                    # Get ticket object first
+                    ticket_update = await db.execute(
+                        select(Ticket).where(Ticket.id == ticket_id)
+                    )
+                    ticket_obj = ticket_update.scalar_one_or_none()
                     
-                    # Auto-assign if confidence is very high and agent is available
-                    if (recommendation.recommended_agent and 
-                        recommendation.confidence > 0.8 and 
-                        recommendation.recommended_agent.current_workload < 3):
-                        
-                        await routing_service.assign_ticket(
-                            ticket_id=ticket_id,
-                            agent_id=recommendation.recommended_agent.agent_id,
-                            assigned_by_id=None  # System assignment
-                        )
+                    if not ticket_obj:
+                        return
+                    
+                    # Use enhanced auto-assignment with team-based routing
+                    assignment_result = await routing_service.auto_assign_ticket_if_confident(
+                        ticket_id=ticket_id,
+                        confidence_threshold=0.80  # Lowered for demo purposes
+                    )
+                    
+                    # Get routing recommendation for detailed info
+                    routing_recommendation = await routing_service.route_ticket(ticket_id)
+                    
+                    # Initialize comments list if needed
+                    if not ticket_obj.comments:
+                        ticket_obj.comments = []
+                    
+                    # Create separate comments for each piece of information
+                    recommended_agent = routing_recommendation.recommended_agent
+                    
+                    # Comment 1: Category
+                    category_comment = {
+                        "user": "AI Assistant",
+                        "text": f"Category: {ticket_obj.category}",
+                        "time": datetime.now(timezone.utc).isoformat()
+                    }
+                    ticket_obj.comments.append(category_comment)
+                    
+                    # Comment 2: Recommended Agent
+                    if recommended_agent:
+                        agent_comment = {
+                            "user": "AI Assistant",
+                            "text": f"Recommended Agent: {recommended_agent.agent_name}",
+                            "time": datetime.now(timezone.utc).isoformat()
+                        }
+                        ticket_obj.comments.append(agent_comment)
+                    
+                    # Comment 3: Recommended Team
+                    if routing_recommendation.team_recommendation:
+                        team_comment = {
+                            "user": "AI Assistant",
+                            "text": f"Recommended Team: {routing_recommendation.team_recommendation}",
+                            "time": datetime.now(timezone.utc).isoformat()
+                        }
+                        ticket_obj.comments.append(team_comment)
+                    
+                    # Comment 4: Availability
+                    if recommended_agent:
+                        availability_comment = {
+                            "user": "AI Assistant",
+                            "text": f"Availability: {recommended_agent.availability}",
+                            "time": datetime.now(timezone.utc).isoformat()
+                        }
+                        ticket_obj.comments.append(availability_comment)
+                    
+                    # Comment 5: Assignment status (if auto-assigned)
+                    if assignment_result.get("auto_assigned"):
+                        assigned_agent = assignment_result['assigned_agent']
+                        assignment_comment = {
+                            "user": "System",
+                            "text": f"Ticket assigned to {assigned_agent['name']}",
+                            "time": datetime.now(timezone.utc).isoformat()
+                        }
+                        ticket_obj.comments.append(assignment_comment)
             
             await db.commit()
             

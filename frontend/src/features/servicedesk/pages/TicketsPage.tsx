@@ -6,8 +6,11 @@ import {
   useGetTicketsQuery,
   useCreateTicketMutation,
   useUpdateTicketMutation,
+  useAssignTicketMutation,
+  useResolveTicketWithFeedbackMutation,
   Ticket,
 } from '../../../store/api/ticketsApi';
+import { useGetAssignableUsersQuery } from '../../../store/api/usersApi';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -28,19 +31,23 @@ const priorityColors: Record<string, string> = {
 };
 
 const categoryOptions = ['Access Issue', 'Service Request', 'Performance', 'Bug Report', 'Feature Request', 'Other'];
-const assigneeOptions = ['Support Team', 'Mike Wilson', 'Emily Davis', 'Alex Chen', 'John Smith'];
 
 const TicketsPage: React.FC = () => {
   const { data: ticketsData, isLoading } = useGetTicketsQuery({ skip: 0, limit: 100 });
+  const { data: assignableUsers = [] } = useGetAssignableUsersQuery();
   const [createTicket] = useCreateTicketMutation();
   const [updateTicket] = useUpdateTicketMutation();
+  const [assignTicket] = useAssignTicketMutation();
+  const [resolveTicketWithFeedback] = useResolveTicketWithFeedbackMutation();
 
   const [searchText, setSearchText] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [newComment, setNewComment] = useState('');
   const [form] = Form.useForm();
+  const [feedbackForm] = Form.useForm();
 
   const tickets = ticketsData?.items || [];
 
@@ -73,28 +80,41 @@ const TicketsPage: React.FC = () => {
     setIsDetailDrawerOpen(true);
   };
 
-  const handleAssign = async (ticket: Ticket, assignee: string) => {
+  const handleAssign = async (ticket: Ticket, assigneeId: string) => {
     try {
-      await updateTicket({
+      await assignTicket({
         id: ticket.id,
-        data: {
-          assignee_name: assignee,
-          status: ticket.status === 'open' ? 'in_progress' : ticket.status,
-        },
+        data: { assignee_id: assigneeId },
       }).unwrap();
-      message.success(`Ticket assigned to ${assignee}`);
+      const assignedUser = assignableUsers.find(u => u.id === assigneeId);
+      message.success(`Ticket assigned to ${assignedUser?.name || 'user'}`);
     } catch (error: any) {
       message.error(error?.data?.detail || 'Failed to assign ticket');
     }
   };
 
-  const handleResolve = async (ticket: Ticket) => {
+  const handleResolve = (ticket: Ticket) => {
+    setSelectedTicket(ticket);
+    setIsFeedbackModalOpen(true);
+  };
+
+  const handleResolveWithFeedback = async () => {
+    if (!selectedTicket) return;
+
     try {
-      await updateTicket({
-        id: ticket.id,
-        data: { status: 'resolved' },
+      const values = await feedbackForm.validateFields();
+      await resolveTicketWithFeedback({
+        id: selectedTicket.id,
+        feedback: {
+          title: values.title,
+          content: values.content,
+          tags: values.tags || [],
+        },
       }).unwrap();
-      message.success(`Ticket ${ticket.id} resolved`);
+      message.success('Ticket resolved and knowledge shared!');
+      setIsFeedbackModalOpen(false);
+      setSelectedTicket(null);
+      feedbackForm.resetFields();
     } catch (error: any) {
       message.error(error?.data?.detail || 'Failed to resolve ticket');
     }
@@ -185,7 +205,11 @@ const TicketsPage: React.FC = () => {
           style={{ width: 120 }}
           onChange={(value) => handleAssign(record, value)}
         >
-          {assigneeOptions.map(a => <Select.Option key={a} value={a}>{a}</Select.Option>)}
+          {assignableUsers.map(user => (
+            <Select.Option key={user.id} value={user.id}>
+              {user.name}
+            </Select.Option>
+          ))}
         </Select>
       ),
     },
@@ -209,17 +233,14 @@ const TicketsPage: React.FC = () => {
             title="View Details"
           />
           {record.status === 'in_progress' && (
-            <Popconfirm
-              title="Resolve Ticket"
-              description="Mark this ticket as resolved?"
-              onConfirm={() => handleResolve(record)}
-              okText="Resolve"
-              cancelText="Cancel"
+            <Button
+              size="small"
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleResolve(record)}
             >
-              <Button size="small" type="primary" icon={<CheckCircleOutlined />}>
-                Resolve
-              </Button>
-            </Popconfirm>
+              Resolve
+            </Button>
           )}
         </Space>
       ),
@@ -284,7 +305,11 @@ const TicketsPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="assignee" label="Assignee">
             <Select placeholder="Assign to (optional)">
-              {assigneeOptions.map(a => <Select.Option key={a} value={a}>{a}</Select.Option>)}
+              {assignableUsers.map(user => (
+                <Select.Option key={user.id} value={user.name}>
+                  {user.display_name}
+                </Select.Option>
+              ))}
             </Select>
           </Form.Item>
         </Form>
@@ -298,7 +323,10 @@ const TicketsPage: React.FC = () => {
         width={600}
         extra={
           selectedTicket?.status === 'in_progress' && (
-            <Button type="primary" onClick={() => { handleResolve(selectedTicket); setIsDetailDrawerOpen(false); }}>
+            <Button type="primary" onClick={() => {
+              setIsDetailDrawerOpen(false);
+              handleResolve(selectedTicket);
+            }}>
               Resolve Ticket
             </Button>
           )
@@ -363,6 +391,53 @@ const TicketsPage: React.FC = () => {
           </Space>
         )}
       </Drawer>
+
+      {/* Feedback Modal for Resolve */}
+      <Modal
+        title="Resolve Ticket & Share Knowledge"
+        open={isFeedbackModalOpen}
+        onOk={handleResolveWithFeedback}
+        onCancel={() => {
+          setIsFeedbackModalOpen(false);
+          setSelectedTicket(null);
+          feedbackForm.resetFields();
+        }}
+        okText="Resolve & Share"
+        width={600}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text type="secondary">
+            Share your solution to help other team members resolve similar issues in the future.
+            This will create a knowledge base article automatically.
+          </Text>
+        </div>
+        <Form form={feedbackForm} layout="vertical">
+          <Form.Item
+            name="title"
+            label="Solution Title"
+            rules={[{ required: true, message: 'Please provide a title for the solution' }]}
+          >
+            <Input placeholder="Brief title describing the solution" />
+          </Form.Item>
+          <Form.Item
+            name="content"
+            label="Solution Details"
+            rules={[{ required: true, message: 'Please describe how you solved this issue' }]}
+          >
+            <TextArea
+              rows={6}
+              placeholder="Describe the steps you took to resolve this issue, including any troubleshooting steps, root cause, and final solution..."
+            />
+          </Form.Item>
+          <Form.Item name="tags" label="Tags (Optional)">
+            <Select
+              mode="tags"
+              placeholder="Add relevant tags (e.g., network, database, authentication)"
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

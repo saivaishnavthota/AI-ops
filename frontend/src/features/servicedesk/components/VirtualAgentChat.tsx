@@ -228,7 +228,6 @@ const VirtualAgentChat: React.FC<VirtualAgentChatProps> = ({ onEscalate, onClose
                                         <Tag
                                             icon={<CheckCircleOutlined />}
                                             color={msg.ai_confidence > 0.8 ? 'green' : msg.ai_confidence > 0.6 ? 'orange' : 'red'}
-                                            size="small"
                                         >
                                             {(msg.ai_confidence * 100).toFixed(0)}%
                                         </Tag>
@@ -237,7 +236,7 @@ const VirtualAgentChat: React.FC<VirtualAgentChatProps> = ({ onEscalate, onClose
 
                                 {msg.kb_articles && msg.kb_articles.length > 0 && (
                                     <Tooltip title="Knowledge Base articles referenced">
-                                        <Tag icon={<BookOutlined />} color="blue" size="small">
+                                        <Tag icon={<BookOutlined />} color="blue">
                                             {msg.kb_articles.length} KB articles
                                         </Tag>
                                     </Tooltip>
@@ -245,7 +244,7 @@ const VirtualAgentChat: React.FC<VirtualAgentChatProps> = ({ onEscalate, onClose
 
                                 {msg.actions && msg.actions.length > 0 && (
                                     <Tooltip title={`Actions: ${msg.actions.join(', ')}`}>
-                                        <Tag icon={<ThunderboltOutlined />} color="purple" size="small">
+                                        <Tag icon={<ThunderboltOutlined />} color="purple">
                                             {msg.actions.length} actions
                                         </Tag>
                                     </Tooltip>
