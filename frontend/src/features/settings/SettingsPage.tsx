@@ -157,6 +157,12 @@ const menuItems = [
 
 const SettingsPage: React.FC = () => {
   const location = useLocation();
+  const { user } = useAuth();
+
+  // Filter menu items based on user role
+  const visibleMenuItems = user?.role === 'admin'
+    ? menuItems
+    : menuItems.filter(item => item.key === '/settings/profile' || item.key === '/settings/notifications');
 
   return (
     <div>
@@ -167,7 +173,7 @@ const SettingsPage: React.FC = () => {
             <Menu
               mode="vertical"
               selectedKeys={[location.pathname]}
-              items={menuItems.map((item) => ({
+              items={visibleMenuItems.map((item) => ({
                 ...item,
                 label: <Link to={item.key}>{item.label}</Link>,
               }))}
@@ -177,7 +183,7 @@ const SettingsPage: React.FC = () => {
         <Col span={18}>
           <Card>
             <Routes>
-              <Route index element={<GeneralSettings />} />
+              <Route index element={user?.role === 'admin' ? <GeneralSettings /> : <ProfileSettings />} />
               <Route path="profile" element={<ProfileSettings />} />
               <Route path="notifications" element={<NotificationSettings />} />
               <Route path="security" element={<div><Title level={4}>Security Settings</Title><p>Coming soon...</p></div>} />

@@ -54,4 +54,7 @@ class AuditLog(BaseModel):
     user = relationship("User", back_populates="audit_logs")
 
     def __repr__(self) -> str:
-        return f"<AuditLog {self.action} {self.resource_type}>"
+        try:
+            return f"<AuditLog {self.action} {self.resource_type}>"
+        except:
+            return f"<AuditLog id={self.id}>"

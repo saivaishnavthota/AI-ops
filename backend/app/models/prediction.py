@@ -80,4 +80,7 @@ class Prediction(BaseModel):
     organization = relationship("Organization", back_populates="predictions")
 
     def __repr__(self) -> str:
-        return f"<Prediction {self.type} - {self.resource}>"
+        try:
+            return f"<Prediction {self.type} - {self.resource}>"
+        except:
+            return f"<Prediction id={self.id}>"

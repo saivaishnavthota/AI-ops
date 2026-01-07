@@ -50,11 +50,14 @@ class InvestigationResponse(BaseSchema):
     assignee_name: str
     progress: int
     events_linked: int
-    findings: List[str]
-    timeline: List[Dict[str, Any]]
+    findings: List[Any] = []
+    timeline: List[Any] = []
     created_by_id: Optional[UUID]
     created_at: datetime
     updated_at: datetime
+    
+    class Config:
+        from_attributes = True
 
 
 class InvestigationListResponse(PaginatedResponse[InvestigationResponse]):

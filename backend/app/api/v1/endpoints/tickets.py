@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, update, delete, func
 from typing import Optional, Dict, Any, List
@@ -23,6 +23,8 @@ from app.schemas.ticket import (
 from app.services.virtual_agent_service import VirtualAgentService
 from app.services.smart_routing_service import SmartRoutingService
 from app.services.proactive_support_service import ProactiveSupportService
+from app.services.ai_service import AIService
+from app.core.audit_logger import log_create, log_update, log_delete, log_assign, log_resolve
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +169,7 @@ async def create_ticket(
     db: DBSession,
     current_user: CurrentUser,
     background_tasks: BackgroundTasks,
+    request: Request,
     auto_classify: bool = Query(True, description="Enable AI auto-classification"),
     auto_route: bool = Query(True, description="Enable AI auto-routing"),
 ):
@@ -182,6 +185,16 @@ async def create_ticket(
     db.add(ticket)
     await db.commit()
     await db.refresh(ticket)
+    
+    # Audit log
+    await log_create(
+        db=db,
+        user=current_user,
+        resource_type="ticket",
+        resource_id=str(ticket.id),
+        resource_name=ticket.subject,
+        request=request,
+    )
     
     # AI Enhancement: Auto-classify and route ticket
     if auto_classify or auto_route:
@@ -226,6 +239,7 @@ async def update_ticket(
     ticket_in: TicketUpdate,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Update a ticket."""
     result = await db.execute(
@@ -253,6 +267,17 @@ async def update_ticket(
     
     await db.commit()
     await db.refresh(ticket)
+    
+    # Audit log
+    await log_update(
+        db=db,
+        user=current_user,
+        resource_type="ticket",
+        resource_id=str(ticket.id),
+        resource_name=ticket.subject,
+        request=request,
+    )
+    
     return ticket
 
 
@@ -262,6 +287,7 @@ async def resolve_ticket_with_feedback(
     feedback_data: Dict[str, Any],
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Resolve a ticket and create knowledge base article from feedback."""
     
@@ -338,6 +364,16 @@ async def resolve_ticket_with_feedback(
     await db.commit()
     await db.refresh(ticket)
     
+    # Audit log
+    await log_resolve(
+        db=db,
+        user=current_user,
+        resource_type="ticket",
+        resource_id=str(ticket.id),
+        resource_name=ticket.subject,
+        request=request,
+    )
+    
     return ticket
 
 
@@ -400,6 +436,7 @@ async def assign_ticket_to_user(
     assignment_data: Dict[str, Any],
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Assign a ticket to a specific user."""
     
@@ -472,6 +509,17 @@ async def assign_ticket_to_user(
     await db.commit()
     await db.refresh(ticket)
     
+    # Audit log
+    await log_assign(
+        db=db,
+        user=current_user,
+        resource_type="ticket",
+        resource_id=str(ticket.id),
+        resource_name=ticket.subject,
+        assigned_to=assignee.full_name,
+        request=request,
+    )
+    
     return ticket
 
 
@@ -514,6 +562,7 @@ async def delete_ticket(
     ticket_id: UUID,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Delete a ticket."""
     result = await db.execute(
@@ -530,94 +579,19 @@ async def delete_ticket(
             detail="Ticket not found",
         )
     
+    ticket_subject = ticket.subject
     await db.execute(delete(Ticket).where(Ticket.id == ticket_id))
     await db.commit()
-
-
-@router.put("/{ticket_id}/resolve", response_model=TicketResponse)
-async def resolve_ticket_with_feedback(
-    ticket_id: UUID,
-    feedback_data: Dict[str, Any],
-    db: DBSession,
-    current_user: CurrentUser,
-):
-    """Resolve a ticket and create knowledge base article from feedback."""
     
-    # Get the ticket
-    result = await db.execute(
-        select(Ticket).where(
-            Ticket.id == ticket_id,
-            Ticket.organization_id == current_user.organization_id,
-        )
+    # Audit log
+    await log_delete(
+        db=db,
+        user=current_user,
+        resource_type="ticket",
+        resource_id=str(ticket_id),
+        resource_name=ticket_subject,
+        request=request,
     )
-    ticket = result.scalar_one_or_none()
-    
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found",
-        )
-    
-    # Check if user can resolve this ticket (assigned to them or admin)
-    if (ticket.assignee_id != current_user.id and 
-        current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only resolve tickets assigned to you",
-        )
-    
-    # Update ticket status
-    ticket.status = "resolved"
-    ticket.resolved_at = datetime.now(timezone.utc)
-    
-    # Add resolution comment
-    resolution_comment = {
-        "user": current_user.full_name,
-        "text": f"Ticket resolved by {current_user.full_name}",
-        "time": datetime.now(timezone.utc).isoformat(),
-        "resolution": True
-    }
-    
-    if not ticket.comments:
-        ticket.comments = []
-    ticket.comments.append(resolution_comment)
-    
-    # Create knowledge base article from feedback if provided
-    feedback_title = feedback_data.get("title", "")
-    feedback_content = feedback_data.get("content", "")
-    feedback_tags = feedback_data.get("tags", [])
-    
-    if feedback_title and feedback_content:
-        # Create knowledge base article
-        kb_article = KnowledgeBaseArticle(
-            organization_id=current_user.organization_id,
-            author_id=current_user.id,
-            title=feedback_title,
-            content=feedback_content,
-            excerpt=feedback_content[:200] + "..." if len(feedback_content) > 200 else feedback_content,
-            category=ticket.category,
-            tags=feedback_tags,
-            views=0,
-            helpful_count=0,
-            is_published=True,
-            source_ticket_id=ticket_id,  # Link back to original ticket
-        )
-        db.add(kb_article)
-        
-        # Add feedback comment to ticket
-        feedback_comment = {
-            "user": current_user.full_name,
-            "text": f"Knowledge shared: Created KB article '{feedback_title}'",
-            "time": datetime.now(timezone.utc).isoformat(),
-            "knowledge_shared": True,
-            "kb_article_id": str(kb_article.id)
-        }
-        ticket.comments.append(feedback_comment)
-    
-    await db.commit()
-    await db.refresh(ticket)
-    
-    return ticket
 
 
 @router.get("/resolved-old", response_model=TicketListResponse)
@@ -1292,6 +1266,117 @@ async def enhance_kb_article_with_ai(
             },
             "ai_suggestions": suggestions
         }
+
+
+@router.get("/{ticket_id}/related-articles", response_model=List[Dict[str, Any]])
+async def get_related_kb_articles(
+    ticket_id: UUID,
+    db: DBSession,
+    current_user: CurrentUser,
+    limit: int = Query(5, ge=1, le=10, description="Maximum number of related articles to return"),
+):
+    """Get AI-recommended related KB articles for a ticket based on content similarity."""
+    
+    # Get the ticket
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.id == ticket_id,
+            Ticket.organization_id == current_user.organization_id,
+        )
+    )
+    ticket = result.scalar_one_or_none()
+    
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket not found",
+        )
+    
+    try:
+        # Extract keywords from ticket (simple approach)
+        ticket_text = f"{ticket.subject} {ticket.description}".lower()
+        
+        # Simple keyword extraction - split and filter common words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'what', 'which', 'who', 'when', 'where', 'why', 'how'}
+        words = [w.strip('.,!?;:()[]{}') for w in ticket_text.split()]
+        keywords = [w for w in words if len(w) > 3 and w not in stop_words][:10]
+        
+        # Search for related KB articles
+        from sqlalchemy import or_, and_
+        
+        # Build search query with keywords and category
+        search_conditions = []
+        
+        # Add keyword searches
+        for keyword in keywords[:5]:  # Use top 5 keywords
+            search_conditions.append(KnowledgeBaseArticle.title.ilike(f"%{keyword}%"))
+            search_conditions.append(KnowledgeBaseArticle.content.ilike(f"%{keyword}%"))
+            search_conditions.append(KnowledgeBaseArticle.excerpt.ilike(f"%{keyword}%"))
+        
+        # Add category match (higher priority)
+        search_conditions.append(KnowledgeBaseArticle.category == ticket.category)
+        
+        # Query KB articles
+        if search_conditions:
+            kb_result = await db.execute(
+                select(KnowledgeBaseArticle).where(
+                    and_(
+                        KnowledgeBaseArticle.organization_id == current_user.organization_id,
+                        KnowledgeBaseArticle.is_published == True,
+                        or_(*search_conditions)
+                    )
+                ).order_by(
+                    desc(KnowledgeBaseArticle.helpful_count),
+                    desc(KnowledgeBaseArticle.views)
+                ).limit(limit)
+            )
+            
+            articles = kb_result.scalars().all()
+        else:
+            # If no keywords, just return articles from same category
+            kb_result = await db.execute(
+                select(KnowledgeBaseArticle).where(
+                    and_(
+                        KnowledgeBaseArticle.organization_id == current_user.organization_id,
+                        KnowledgeBaseArticle.is_published == True,
+                        KnowledgeBaseArticle.category == ticket.category
+                    )
+                ).order_by(
+                    desc(KnowledgeBaseArticle.helpful_count),
+                    desc(KnowledgeBaseArticle.views)
+                ).limit(limit)
+            )
+            articles = kb_result.scalars().all()
+        
+        # Format response
+        related_articles = []
+        for article in articles:
+            # Calculate simple relevance score based on keyword matches
+            relevance = 0.5  # Base score for category match
+            article_text = f"{article.title} {article.excerpt}".lower()
+            matches = sum(1 for kw in keywords[:5] if kw in article_text)
+            relevance += (matches / 5) * 0.5  # Add up to 0.5 for keyword matches
+            
+            related_articles.append({
+                "id": str(article.id),
+                "title": article.title,
+                "excerpt": article.excerpt,
+                "category": article.category,
+                "tags": article.tags,
+                "views": article.views,
+                "helpful_count": article.helpful_count,
+                "relevance_score": min(relevance, 1.0),
+            })
+        
+        # Sort by relevance score
+        related_articles.sort(key=lambda x: x['relevance_score'], reverse=True)
+        
+        return related_articles
+        
+    except Exception as e:
+        logger.error(f"Error finding related KB articles: {e}")
+        # Return empty list on error rather than failing
+        return []
 
 
 # Helper function for background AI processing

@@ -65,4 +65,7 @@ class Investigation(BaseModel):
     organization = relationship("Organization", back_populates="investigations")
 
     def __repr__(self) -> str:
-        return f"<Investigation {self.title}>"
+        try:
+            return f"<Investigation {self.title}>"
+        except:
+            return f"<Investigation id={self.id}>"

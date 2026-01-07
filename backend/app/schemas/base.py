@@ -24,17 +24,24 @@ class PaginatedResponse(BaseSchema, Generic[T]):
 
     items: List[T]
     total: int
-    page: int
-    page_size: int
-    pages: int
+    skip: int = 0
+    limit: int = 100
+
+    @property
+    def page(self) -> int:
+        return (self.skip // self.limit) + 1 if self.limit > 0 else 1
+
+    @property
+    def pages(self) -> int:
+        return (self.total + self.limit - 1) // self.limit if self.limit > 0 else 1
 
     @property
     def has_next(self) -> bool:
-        return self.page < self.pages
+        return self.skip + self.limit < self.total
 
     @property
     def has_prev(self) -> bool:
-        return self.page > 1
+        return self.skip > 0
 
 
 class MessageResponse(BaseSchema):

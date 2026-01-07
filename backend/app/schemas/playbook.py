@@ -61,20 +61,23 @@ class PlaybookResponse(BaseSchema):
     organization_id: UUID
     name: str
     description: Optional[str]
-    trigger_conditions: Dict[str, Any]
+    trigger_conditions: Optional[Dict[str, Any]] = {}
     steps: List[Dict[str, Any]]
     requires_approval: bool
-    approval_roles: List[str]
+    approval_roles: Optional[List[str]] = []
     is_active: bool
     execution_count: int
     success_count: int
     failure_count: int
     success_rate: float
     avg_execution_time_seconds: Optional[int]
-    tags: List[str]
+    tags: Optional[List[str]] = []
     created_by_id: Optional[UUID]
     created_at: datetime
     updated_at: datetime
+    
+    class Config:
+        from_attributes = True
 
 
 class PlaybookListResponse(PaginatedResponse[PlaybookResponse]):

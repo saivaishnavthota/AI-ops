@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Card, Table, Tag, Typography, Space, Button, Avatar, Input, Modal, Form, Select, message, Drawer, Descriptions, Timeline, Popconfirm } from 'antd';
-import { PlusOutlined, UserOutlined, SearchOutlined, CheckCircleOutlined, CommentOutlined } from '@ant-design/icons';
+import { Card, Table, Tag, Typography, Space, Button, Avatar, Input, Modal, Form, Select, message, Drawer, Descriptions, Timeline, Popconfirm, List, Divider } from 'antd';
+import { PlusOutlined, UserOutlined, SearchOutlined, CheckCircleOutlined, CommentOutlined, BookOutlined, LinkOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import {
   useGetTicketsQuery,
@@ -8,6 +9,7 @@ import {
   useUpdateTicketMutation,
   useAssignTicketMutation,
   useResolveTicketWithFeedbackMutation,
+  useGetRelatedKBArticlesQuery,
   Ticket,
 } from '../../../store/api/ticketsApi';
 import { useGetAssignableUsersQuery } from '../../../store/api/usersApi';
@@ -32,7 +34,98 @@ const priorityColors: Record<string, string> = {
 
 const categoryOptions = ['Access Issue', 'Service Request', 'Performance', 'Bug Report', 'Feature Request', 'Other'];
 
+// Related KB Articles Component
+interface RelatedKBArticlesSectionProps {
+  ticketId: string;
+  onViewArticle: (articleId: string) => void;
+}
+
+const RelatedKBArticlesSection: React.FC<RelatedKBArticlesSectionProps> = ({ ticketId, onViewArticle }) => {
+  const { data: relatedArticles = [], isLoading } = useGetRelatedKBArticlesQuery(ticketId);
+
+  if (isLoading) {
+    return (
+      <Card
+        title={
+          <Space>
+            <BookOutlined />
+            <span>Related Knowledge Base Articles</span>
+            <Tag color="blue">AI Recommended</Tag>
+          </Space>
+        }
+        size="small"
+      >
+        <Text type="secondary">Loading related articles...</Text>
+      </Card>
+    );
+  }
+
+  if (!relatedArticles || relatedArticles.length === 0) {
+    return null; // Don't show the section if no articles found
+  }
+
+  return (
+    <Card
+      title={
+        <Space>
+          <BookOutlined />
+          <span>Related Knowledge Base Articles</span>
+          <Tag color="blue">AI Recommended</Tag>
+        </Space>
+      }
+      size="small"
+    >
+      <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+        These articles might help resolve this ticket faster
+      </Text>
+      <List
+        dataSource={relatedArticles}
+        renderItem={(article) => (
+          <List.Item
+            key={article.id}
+            style={{ cursor: 'pointer', padding: '12px 0' }}
+            onClick={() => onViewArticle(article.id)}
+          >
+            <List.Item.Meta
+              avatar={<BookOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
+              title={
+                <Space>
+                  <a onClick={(e) => { e.stopPropagation(); onViewArticle(article.id); }}>
+                    {article.title}
+                  </a>
+                  <Tag color="green">{Math.round(article.relevance_score * 100)}% match</Tag>
+                </Space>
+              }
+              description={
+                <div>
+                  <Paragraph
+                    ellipsis={{ rows: 2 }}
+                    style={{ margin: '4px 0', color: '#666' }}
+                  >
+                    {article.excerpt}
+                  </Paragraph>
+                  <Space size="small" style={{ marginTop: 4 }}>
+                    <Tag>{article.category}</Tag>
+                    {article.tags.slice(0, 3).map(tag => (
+                      <Tag key={tag} color="default">{tag}</Tag>
+                    ))}
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {article.views} views • {article.helpful_count} helpful
+                    </Text>
+                  </Space>
+                </div>
+              }
+            />
+            <LinkOutlined style={{ fontSize: 16, color: '#1890ff' }} />
+          </List.Item>
+        )}
+      />
+    </Card>
+  );
+};
+
 const TicketsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { data: ticketsData, isLoading } = useGetTicketsQuery({ skip: 0, limit: 100 });
   const { data: assignableUsers = [] } = useGetAssignableUsersQuery();
   const [createTicket] = useCreateTicketMutation();
@@ -78,6 +171,12 @@ const TicketsPage: React.FC = () => {
   const handleViewDetails = (ticket: Ticket) => {
     setSelectedTicket(ticket);
     setIsDetailDrawerOpen(true);
+  };
+
+  // Navigate to KB article
+  const handleViewKBArticle = (articleId: string) => {
+    setIsDetailDrawerOpen(false);
+    navigate(`/knowledge-base?article=${articleId}`);
   };
 
   const handleAssign = async (ticket: Ticket, assigneeId: string) => {
@@ -388,6 +487,12 @@ const TicketsPage: React.FC = () => {
                 </Button>
               </div>
             </Card>
+
+            {/* Related KB Articles Section */}
+            <RelatedKBArticlesSection
+              ticketId={selectedTicket.id}
+              onViewArticle={handleViewKBArticle}
+            />
           </Space>
         )}
       </Drawer>
@@ -432,8 +537,21 @@ const TicketsPage: React.FC = () => {
           <Form.Item name="tags" label="Tags (Optional)">
             <Select
               mode="tags"
-              placeholder="Add relevant tags (e.g., network, database, authentication)"
+              placeholder="Type to add tags (e.g., network, database, authentication)"
               style={{ width: '100%' }}
+              tokenSeparators={[',']}
+              options={[
+                { value: 'network', label: 'network' },
+                { value: 'database', label: 'database' },
+                { value: 'authentication', label: 'authentication' },
+                { value: 'performance', label: 'performance' },
+                { value: 'security', label: 'security' },
+                { value: 'api', label: 'api' },
+                { value: 'configuration', label: 'configuration' },
+                { value: 'deployment', label: 'deployment' },
+                { value: 'monitoring', label: 'monitoring' },
+                { value: 'troubleshooting', label: 'troubleshooting' },
+              ]}
             />
           </Form.Item>
         </Form>

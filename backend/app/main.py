@@ -72,9 +72,13 @@ if len(safe_origins) != len(cors_origins):
     )
 
 # Use only explicit origins with credentials
+# Ensure localhost:7026 is always included for the frontend
+default_origins = ["http://localhost:7026", "http://localhost:3000", "http://localhost:5173"]
+final_origins = list(set(safe_origins + default_origins)) if safe_origins else default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=safe_origins if safe_origins else ["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=final_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],  # Allow all headers for development

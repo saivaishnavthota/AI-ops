@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, func, select, update, delete
 from typing import Optional
@@ -16,6 +16,7 @@ from app.schemas.playbook import (
     PlaybookExecutionResponse,
     PlaybookExecutionListResponse,
 )
+from app.core.audit_logger import log_create, log_update, log_delete, log_execute
 
 router = APIRouter(prefix="/playbooks", tags=["Playbooks"])
 
@@ -70,6 +71,7 @@ async def create_playbook(
     playbook_in: PlaybookCreate,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Create a new playbook."""
     playbook = Playbook(
@@ -80,6 +82,17 @@ async def create_playbook(
     db.add(playbook)
     await db.commit()
     await db.refresh(playbook)
+    
+    # Audit log
+    await log_create(
+        db=db,
+        user=current_user,
+        resource_type="playbook",
+        resource_id=str(playbook.id),
+        resource_name=playbook.name,
+        request=request,
+    )
+    
     return playbook
 
 
@@ -113,6 +126,7 @@ async def update_playbook(
     playbook_in: PlaybookUpdate,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Update a playbook."""
     result = await db.execute(
@@ -135,6 +149,17 @@ async def update_playbook(
     
     await db.commit()
     await db.refresh(playbook)
+    
+    # Audit log
+    await log_update(
+        db=db,
+        user=current_user,
+        resource_type="playbook",
+        resource_id=str(playbook.id),
+        resource_name=playbook.name,
+        request=request,
+    )
+    
     return playbook
 
 
@@ -143,6 +168,7 @@ async def delete_playbook(
     playbook_id: UUID,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Delete a playbook."""
     result = await db.execute(
@@ -159,8 +185,19 @@ async def delete_playbook(
             detail="Playbook not found",
         )
     
+    playbook_name = playbook.name
     await db.execute(delete(Playbook).where(Playbook.id == playbook_id))
     await db.commit()
+    
+    # Audit log
+    await log_delete(
+        db=db,
+        user=current_user,
+        resource_type="playbook",
+        resource_id=str(playbook_id),
+        resource_name=playbook_name,
+        request=request,
+    )
 
 
 @router.post("/{playbook_id}/execute", response_model=PlaybookExecutionResponse)
@@ -169,6 +206,7 @@ async def execute_playbook(
     execute_request: PlaybookExecuteRequest,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Execute a playbook manually."""
     result = await db.execute(
@@ -211,6 +249,16 @@ async def execute_playbook(
     
     await db.commit()
     await db.refresh(execution)
+    
+    # Audit log
+    await log_execute(
+        db=db,
+        user=current_user,
+        resource_type="playbook",
+        resource_id=str(playbook.id),
+        resource_name=playbook.name,
+        request=request,
+    )
     
     # Add playbook name for response
     execution_dict = {

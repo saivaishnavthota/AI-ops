@@ -59,6 +59,17 @@ export interface KnowledgeBaseArticle {
     updated_at: string;
 }
 
+export interface RelatedKBArticle {
+    id: string;
+    title: string;
+    excerpt: string;
+    category: string;
+    tags: string[];
+    views: number;
+    helpful_count: number;
+    relevance_score: number;
+}
+
 export interface KBArticleCreateRequest {
     title: string;
     excerpt: string;
@@ -169,6 +180,10 @@ export const ticketsApi = baseApi.injectEndpoints({
             }),
             invalidatesTags: ['KBArticles'],
         }),
+        getRelatedKBArticles: builder.query<RelatedKBArticle[], string>({
+            query: (ticketId) => `/tickets/${ticketId}/related-articles`,
+            providesTags: (_result, _error, ticketId) => [{ type: 'Tickets', id: ticketId }],
+        }),
     }),
 });
 
@@ -186,4 +201,5 @@ export const {
     useUpdateKBArticleMutation,
     useMarkKBArticleHelpfulMutation,
     useDeleteKBArticleMutation,
+    useGetRelatedKBArticlesQuery,
 } = ticketsApi;

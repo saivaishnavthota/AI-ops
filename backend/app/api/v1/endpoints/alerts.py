@@ -1,7 +1,7 @@
 from typing import Optional, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
 from app.api.v1.deps import CurrentUser, CurrentOrganization, DBSession
 from app.services.alert_service import AlertService
@@ -20,6 +20,7 @@ from app.schemas.alert import (
 )
 from app.schemas.incident import IncidentResponse
 from app.core.exceptions import NotFoundError, ValidationError
+from app.core.audit_logger import log_create, log_acknowledge, log_resolve
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
@@ -71,6 +72,7 @@ async def ingest_alert(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Ingest a new alert (webhook endpoint)."""
     alert_service = AlertService(db)
@@ -78,6 +80,17 @@ async def ingest_alert(
         organization_id=current_org.id,
         data=data,
     )
+    
+    # Audit log
+    await log_create(
+        db=db,
+        user=current_user,
+        resource_type="alert",
+        resource_id=str(alert.id),
+        resource_name=alert.title,
+        request=request,
+    )
+    
     return AlertResponse.model_validate(alert)
 
 
@@ -143,6 +156,7 @@ async def acknowledge_alert(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Acknowledge an alert."""
     try:
@@ -152,6 +166,17 @@ async def acknowledge_alert(
             organization_id=current_org.id,
             user_id=current_user.id,
         )
+        
+        # Audit log
+        await log_acknowledge(
+            db=db,
+            user=current_user,
+            resource_type="alert",
+            resource_id=str(alert.id),
+            resource_name=alert.title,
+            request=request,
+        )
+        
         return AlertResponse.model_validate(alert)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -165,6 +190,7 @@ async def resolve_alert(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Resolve an alert."""
     try:
@@ -173,6 +199,17 @@ async def resolve_alert(
             alert_id=alert_id,
             organization_id=current_org.id,
         )
+        
+        # Audit log
+        await log_resolve(
+            db=db,
+            user=current_user,
+            resource_type="alert",
+            resource_id=str(alert.id),
+            resource_name=alert.title,
+            request=request,
+        )
+        
         return AlertResponse.model_validate(alert)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

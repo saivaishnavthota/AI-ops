@@ -127,7 +127,10 @@ class Incident(BaseModel):
     alerts = relationship("Alert", back_populates="incident", lazy="dynamic")
 
     def __repr__(self) -> str:
-        return f"<Incident {self.incident_number}>"
+        try:
+            return f"<Incident {self.incident_number}>"
+        except:
+            return f"<Incident id={self.id}>"
 
 
 class IncidentComment(BaseModel):

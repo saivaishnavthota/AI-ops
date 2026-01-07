@@ -10,6 +10,7 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
 
 import { toggleSidebar } from '../../store/slices/uiSlice';
 import { useAuth } from '../../hooks/useAuth';
@@ -19,6 +20,7 @@ const { Header: AntHeader } = Layout;
 
 const Header: React.FC = () => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const collapsed = useSelector((state: RootState) => state.ui.sidebarCollapsed);
 
@@ -47,6 +49,10 @@ const Header: React.FC = () => {
   const handleMenuClick = ({ key }: { key: string }) => {
     if (key === 'logout') {
       logout();
+    } else if (key === 'profile') {
+      navigate('/settings/profile');
+    } else if (key === 'settings') {
+      navigate('/settings');
     }
   };
 

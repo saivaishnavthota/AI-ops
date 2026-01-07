@@ -62,4 +62,7 @@ class SecurityEvent(BaseModel):
     organization = relationship("Organization", back_populates="security_events")
 
     def __repr__(self) -> str:
-        return f"<SecurityEvent {self.type} - {self.severity}>"
+        try:
+            return f"<SecurityEvent {self.type} - {self.severity}>"
+        except:
+            return f"<SecurityEvent id={self.id}>"

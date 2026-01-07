@@ -179,15 +179,13 @@ const App: React.FC = () => {
             </OperatorAndAbove>
           } />
 
+          {/* Settings - Profile accessible to all, other settings admin only */}
+          <Route path="settings/*" element={<SettingsPage />} />
+
           {/* Admin only routes */}
           <Route path="users" element={
             <AdminOnly>
               <UsersPage />
-            </AdminOnly>
-          } />
-          <Route path="settings/*" element={
-            <AdminOnly>
-              <SettingsPage />
             </AdminOnly>
           } />
           <Route path="audit-log" element={

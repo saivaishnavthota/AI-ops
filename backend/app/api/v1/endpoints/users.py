@@ -1,5 +1,5 @@
 """Users management API endpoints (Admin only)."""
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from typing import Optional, List
@@ -17,6 +17,7 @@ from app.schemas.user import (
 from app.schemas.base import MessageResponse, PaginatedResponse
 from app.core.security import get_password_hash
 from app.core.exceptions import NotFoundError, AuthorizationError, ConflictError
+from app.core.audit_logger import log_create, log_update, log_delete, log_activate, log_deactivate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -147,6 +148,7 @@ async def create_user(
     data: UserCreate,
     current_user: CurrentUser,
     db: DBSession,
+    request: Request,
 ):
     """Create a new user in the organization (Admin only)."""
     require_admin(current_user)
@@ -190,6 +192,16 @@ async def create_user(
     db.add(user)
     await db.commit()
     await db.refresh(user)
+    
+    # Audit log
+    await log_create(
+        db=db,
+        user=current_user,
+        resource_type="user",
+        resource_id=str(user.id),
+        resource_name=user.full_name,
+        request=request,
+    )
 
     return UserResponse(
         id=user.id,
@@ -217,6 +229,7 @@ async def update_user(
     data: UserUpdate,
     current_user: CurrentUser,
     db: DBSession,
+    request: Request,
 ):
     """Update a user (Admin only)."""
     require_admin(current_user)
@@ -287,6 +300,16 @@ async def update_user(
 
     await db.commit()
     await db.refresh(user)
+    
+    # Audit log
+    await log_update(
+        db=db,
+        user=current_user,
+        resource_type="user",
+        resource_id=str(user.id),
+        resource_name=user.full_name,
+        request=request,
+    )
 
     return UserResponse(
         id=user.id,
@@ -313,6 +336,7 @@ async def delete_user(
     user_id: UUID,
     current_user: CurrentUser,
     db: DBSession,
+    request: Request,
 ):
     """Delete a user (Admin only)."""
     require_admin(current_user)
@@ -343,9 +367,20 @@ async def delete_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot delete super admin user"
         )
-
+    
+    user_name = user.full_name
     await db.delete(user)
     await db.commit()
+    
+    # Audit log
+    await log_delete(
+        db=db,
+        user=current_user,
+        resource_type="user",
+        resource_id=str(user_id),
+        resource_name=user_name,
+        request=request,
+    )
 
     return MessageResponse(message="User deleted successfully")
 
@@ -355,6 +390,7 @@ async def activate_user(
     user_id: UUID,
     current_user: CurrentUser,
     db: DBSession,
+    request: Request,
 ):
     """Activate a user account (Admin only)."""
     require_admin(current_user)
@@ -375,6 +411,16 @@ async def activate_user(
     user.is_active = True
     await db.commit()
     await db.refresh(user)
+    
+    # Audit log
+    await log_activate(
+        db=db,
+        user=current_user,
+        resource_type="user",
+        resource_id=str(user.id),
+        resource_name=user.full_name,
+        request=request,
+    )
 
     return UserResponse(
         id=user.id,
@@ -401,6 +447,7 @@ async def deactivate_user(
     user_id: UUID,
     current_user: CurrentUser,
     db: DBSession,
+    request: Request,
 ):
     """Deactivate a user account (Admin only)."""
     require_admin(current_user)
@@ -428,6 +475,16 @@ async def deactivate_user(
     user.is_active = False
     await db.commit()
     await db.refresh(user)
+    
+    # Audit log
+    await log_deactivate(
+        db=db,
+        user=current_user,
+        resource_type="user",
+        resource_id=str(user.id),
+        resource_name=user.full_name,
+        request=request,
+    )
 
     return UserResponse(
         id=user.id,

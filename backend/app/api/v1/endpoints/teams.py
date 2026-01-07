@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, func, select, update, delete
 from typing import Optional
@@ -14,6 +14,7 @@ from app.schemas.team import (
     TeamMemberCreate,
     TeamMemberUpdate,
 )
+from app.core.audit_logger import log_create, log_update, log_delete
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
@@ -85,6 +86,7 @@ async def create_team(
     team_in: TeamCreate,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Create a new team."""
     team = Team(
@@ -94,6 +96,16 @@ async def create_team(
     db.add(team)
     await db.commit()
     await db.refresh(team)
+    
+    # Audit log
+    await log_create(
+        db=db,
+        user=current_user,
+        resource_type="team",
+        resource_id=str(team.id),
+        resource_name=team.name,
+        request=request,
+    )
     
     team_dict = {
         "id": str(team.id),
@@ -170,6 +182,7 @@ async def update_team(
     team_in: TeamUpdate,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Update a team."""
     result = await db.execute(
@@ -192,6 +205,16 @@ async def update_team(
     
     await db.commit()
     await db.refresh(team)
+    
+    # Audit log
+    await log_update(
+        db=db,
+        user=current_user,
+        resource_type="team",
+        resource_id=str(team.id),
+        resource_name=team.name,
+        request=request,
+    )
     
     # Get member count
     member_count_result = await db.execute(
@@ -219,6 +242,7 @@ async def delete_team(
     team_id: UUID,
     db: DBSession,
     current_user: CurrentUser,
+    request: Request,
 ):
     """Delete a team."""
     result = await db.execute(
@@ -235,8 +259,19 @@ async def delete_team(
             detail="Team not found",
         )
     
+    team_name = team.name
     await db.execute(delete(Team).where(Team.id == team_id))
     await db.commit()
+    
+    # Audit log
+    await log_delete(
+        db=db,
+        user=current_user,
+        resource_type="team",
+        resource_id=str(team_id),
+        resource_name=team_name,
+        request=request,
+    )
 
 
 @router.get("/{team_id}/members")

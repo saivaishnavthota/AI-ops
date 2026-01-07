@@ -43,7 +43,10 @@ class Organization(BaseModel):
     agent_performance = relationship("AgentPerformance", back_populates="organization", lazy="dynamic")
 
     def __repr__(self) -> str:
-        return f"<Organization {self.name}>"
+        try:
+            return f"<Organization {self.name}>"
+        except:
+            return f"<Organization id={self.id}>"
 
     @property
     def default_settings(self) -> dict:

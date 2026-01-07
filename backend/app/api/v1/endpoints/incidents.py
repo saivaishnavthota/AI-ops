@@ -1,7 +1,7 @@
 from typing import Optional, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 
 from app.api.v1.deps import CurrentUser, CurrentOrganization, DBSession
 from app.services.incident_service import IncidentService
@@ -21,6 +21,7 @@ from app.schemas.incident import (
 )
 from app.schemas.base import MessageResponse
 from app.core.exceptions import NotFoundError, ValidationError
+from app.core.audit_logger import log_create, log_update, log_delete, log_assign, log_resolve, log_close, log_acknowledge
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
 
@@ -84,6 +85,7 @@ async def create_incident(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Create a new incident."""
     service = IncidentService(db)
@@ -92,6 +94,17 @@ async def create_incident(
         data=data,
         reported_by_id=current_user.id,
     )
+    
+    # Audit log
+    await log_create(
+        db=db,
+        user=current_user,
+        resource_type="incident",
+        resource_id=str(incident.id),
+        resource_name=incident.title,
+        request=request,
+    )
+    
     return _incident_to_response(incident)
 
 
@@ -146,6 +159,7 @@ async def update_incident(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Update an incident."""
     try:
@@ -156,6 +170,17 @@ async def update_incident(
             data=data,
             user_id=current_user.id,
         )
+        
+        # Audit log
+        await log_update(
+            db=db,
+            user=current_user,
+            resource_type="incident",
+            resource_id=str(incident.id),
+            resource_name=incident.title,
+            request=request,
+        )
+        
         return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -167,6 +192,7 @@ async def acknowledge_incident(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Acknowledge an incident."""
     try:
@@ -176,6 +202,17 @@ async def acknowledge_incident(
             organization_id=current_org.id,
             user_id=current_user.id,
         )
+        
+        # Audit log
+        await log_acknowledge(
+            db=db,
+            user=current_user,
+            resource_type="incident",
+            resource_id=str(incident.id),
+            resource_name=incident.title,
+            request=request,
+        )
+        
         return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -190,6 +227,7 @@ async def resolve_incident(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Resolve an incident."""
     try:
@@ -201,6 +239,17 @@ async def resolve_incident(
             resolution_notes=data.resolution_notes,
             root_cause=data.root_cause,
         )
+        
+        # Audit log
+        await log_resolve(
+            db=db,
+            user=current_user,
+            resource_type="incident",
+            resource_id=str(incident.id),
+            resource_name=incident.title,
+            request=request,
+        )
+        
         return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -214,6 +263,7 @@ async def close_incident(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Close an incident."""
     try:
@@ -223,6 +273,17 @@ async def close_incident(
             organization_id=current_org.id,
             user_id=current_user.id,
         )
+        
+        # Audit log
+        await log_close(
+            db=db,
+            user=current_user,
+            resource_type="incident",
+            resource_id=str(incident.id),
+            resource_name=incident.title,
+            request=request,
+        )
+        
         return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -237,6 +298,7 @@ async def assign_incident(
     current_user: CurrentUser,
     current_org: CurrentOrganization,
     db: DBSession,
+    request: Request,
 ):
     """Assign incident to team/user."""
     try:
@@ -248,6 +310,19 @@ async def assign_incident(
             assigned_team_id=data.assigned_team_id,
             assigned_user_id=data.assigned_user_id,
         )
+        
+        # Audit log
+        assigned_to = "team" if data.assigned_team_id else "user"
+        await log_assign(
+            db=db,
+            user=current_user,
+            resource_type="incident",
+            resource_id=str(incident.id),
+            resource_name=incident.title,
+            assigned_to=assigned_to,
+            request=request,
+        )
+        
         return _incident_to_response(incident)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

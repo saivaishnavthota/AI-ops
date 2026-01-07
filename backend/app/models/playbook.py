@@ -71,7 +71,10 @@ class Playbook(BaseModel):
     executions = relationship("PlaybookExecution", back_populates="playbook", lazy="dynamic")
 
     def __repr__(self) -> str:
-        return f"<Playbook {self.name}>"
+        try:
+            return f"<Playbook {self.name}>"
+        except:
+            return f"<Playbook id={self.id}>"
 
     @property
     def success_rate(self) -> float:

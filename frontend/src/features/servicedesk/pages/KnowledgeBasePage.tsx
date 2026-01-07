@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Card, Row, Col, Typography, Input, Tag, Space, List, Avatar, Modal, message, Divider } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Row, Col, Typography, Input, Tag, Space, List, Avatar, Modal, message, Divider, Button } from 'antd';
 import { SearchOutlined, FileTextOutlined, BookOutlined, QuestionCircleOutlined, FolderOutlined, LikeOutlined, EyeOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { useSearchParams } from 'react-router-dom';
 import {
   useGetKBArticlesQuery,
+  useGetKBArticleQuery,
   useMarkKBArticleHelpfulMutation,
   KnowledgeBaseArticle,
 } from '../../../store/api/ticketsApi';
@@ -25,6 +27,9 @@ const categories: Category[] = [
 ];
 
 const KnowledgeBasePage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const articleIdFromUrl = searchParams.get('article');
+
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<KnowledgeBaseArticle | null>(null);
@@ -38,7 +43,20 @@ const KnowledgeBasePage: React.FC = () => {
   });
 
   const { data: allArticlesData } = useGetKBArticlesQuery({ skip: 0, limit: 100 });
+  const { data: articleFromUrl } = useGetKBArticleQuery(articleIdFromUrl || '', {
+    skip: !articleIdFromUrl,
+  });
   const [markHelpful] = useMarkKBArticleHelpfulMutation();
+
+  // Auto-open article if URL parameter is present
+  useEffect(() => {
+    if (articleFromUrl && articleIdFromUrl) {
+      setSelectedArticle(articleFromUrl);
+      setIsArticleModalOpen(true);
+      // Clear the URL parameter after opening
+      setSearchParams({});
+    }
+  }, [articleFromUrl, articleIdFromUrl, setSearchParams]);
 
   const allArticles = allArticlesData?.items || [];
   const filteredArticles = articlesData?.items || [];

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database import get_db
 from app.config.settings import settings
 from app.api.v1.deps import CurrentUser, DBSession
 from app.services.auth_service import AuthService
+from app.models.audit import AuditLog
 from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
@@ -45,11 +46,32 @@ async def register(data: RegisterRequest, db: DBSession):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(data: LoginRequest, db: DBSession):
+async def login(data: LoginRequest, request: Request, db: DBSession):
     """Login and get access tokens."""
+    auth_service = AuthService(db)
+    
+    # Get request info for audit log
+    ip_address = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
     try:
-        auth_service = AuthService(db)
         user, access_token, refresh_token = await auth_service.login(data)
+        
+        # Create successful login audit log
+        audit_log = AuditLog(
+            organization_id=user.organization_id,
+            user_id=user.id,
+            action="login",
+            resource_type="auth",
+            resource_id=str(user.id),
+            resource_name=user.full_name,
+            description=f"User {user.full_name} logged in successfully",
+            ip_address=ip_address,
+            user_agent=user_agent,
+            status="success",
+        )
+        db.add(audit_log)
+        await db.commit()
 
         return LoginResponse(
             access_token=access_token,
@@ -58,12 +80,59 @@ async def login(data: LoginRequest, db: DBSession):
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         )
     except AuthenticationError as e:
+        # Create failed login audit log
+        # Try to find user by email to get organization_id
+        from sqlalchemy import select
+        from app.models.user import User
+        
+        result = await db.execute(
+            select(User).where(User.email == data.email.lower())
+        )
+        user = result.scalar_one_or_none()
+        
+        if user:
+            audit_log = AuditLog(
+                organization_id=user.organization_id,
+                user_id=None,  # Don't link to user for failed attempts
+                action="login_failed",
+                resource_type="auth",
+                resource_id=data.email,
+                resource_name=data.email,
+                description=f"Failed login attempt for {data.email}",
+                ip_address=ip_address,
+                user_agent=user_agent,
+                status="failed",
+                error_message=str(e),
+            )
+            db.add(audit_log)
+            await db.commit()
+        
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 
 @router.post("/logout", response_model=MessageResponse)
-async def logout(current_user: CurrentUser):
+async def logout(current_user: CurrentUser, request: Request, db: DBSession):
     """Logout - invalidate tokens (client should discard tokens)."""
+    # Get request info for audit log
+    ip_address = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    
+    # Create logout audit log
+    audit_log = AuditLog(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+        action="logout",
+        resource_type="auth",
+        resource_id=str(current_user.id),
+        resource_name=current_user.full_name,
+        description=f"User {current_user.full_name} logged out",
+        ip_address=ip_address,
+        user_agent=user_agent,
+        status="success",
+    )
+    db.add(audit_log)
+    await db.commit()
+    
     # In a production system, you would add the token to a blacklist
     return MessageResponse(message="Successfully logged out")
 

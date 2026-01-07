@@ -79,7 +79,10 @@ class User(BaseModel):
     audit_logs = relationship("AuditLog", back_populates="user", lazy="dynamic")
 
     def __repr__(self) -> str:
-        return f"<User {self.email}>"
+        try:
+            return f"<User {self.email}>"
+        except:
+            return f"<User id={self.id}>"
 
     @property
     def full_name(self) -> str:

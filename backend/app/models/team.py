@@ -38,7 +38,10 @@ class Team(BaseModel):
     assigned_incidents = relationship("Incident", back_populates="assigned_team", lazy="dynamic")
 
     def __repr__(self) -> str:
-        return f"<Team {self.name}>"
+        try:
+            return f"<Team {self.name}>"
+        except:
+            return f"<Team id={self.id}>"
 
 
 class TeamMember(BaseModel):

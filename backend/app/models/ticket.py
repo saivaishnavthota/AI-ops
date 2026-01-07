@@ -65,7 +65,10 @@ class Ticket(BaseModel):
     organization = relationship("Organization", back_populates="tickets")
 
     def __repr__(self) -> str:
-        return f"<Ticket {self.id} - {self.subject}>"
+        try:
+            return f"<Ticket {self.id} - {self.subject}>"
+        except:
+            return f"<Ticket id={self.id}>"
 
 
 class KnowledgeBaseArticle(BaseModel):
@@ -112,4 +115,7 @@ class KnowledgeBaseArticle(BaseModel):
     organization = relationship("Organization", back_populates="kb_articles")
 
     def __repr__(self) -> str:
-        return f"<KBArticle {self.title}>"
+        try:
+            return f"<KBArticle {self.title}>"
+        except:
+            return f"<KBArticle id={self.id}>"
