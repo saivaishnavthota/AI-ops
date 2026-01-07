@@ -12,6 +12,7 @@ import IncidentListPage from './features/incidents/pages/IncidentListPage';
 import IncidentDetailPage from './features/incidents/pages/IncidentDetailPage';
 import AlertListPage from './features/alerts/pages/AlertListPage';
 import SettingsPage from './features/settings/SettingsPage';
+import NotificationsPage from './features/notifications/NotificationsPage';
 
 // New pages
 import PlaybooksPage from './features/playbooks/pages/PlaybooksPage';
@@ -103,6 +104,9 @@ const App: React.FC = () => {
         >
           {/* Dashboard */}
           <Route index element={<DashboardPage />} />
+
+          {/* Notifications - All authenticated users */}
+          <Route path="notifications" element={<NotificationsPage />} />
 
           {/* Incidents */}
           <Route path="incidents" element={<IncidentListPage />} />

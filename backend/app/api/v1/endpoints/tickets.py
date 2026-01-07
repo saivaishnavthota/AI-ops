@@ -24,6 +24,7 @@ from app.services.virtual_agent_service import VirtualAgentService
 from app.services.smart_routing_service import SmartRoutingService
 from app.services.proactive_support_service import ProactiveSupportService
 from app.services.ai_service import AIService
+from app.services.notification_service import NotificationService
 from app.core.audit_logger import log_create, log_update, log_delete, log_assign, log_resolve
 
 logger = logging.getLogger(__name__)
@@ -508,6 +509,14 @@ async def assign_ticket_to_user(
     
     await db.commit()
     await db.refresh(ticket)
+    
+    # Create notification for the assignee
+    notification_service = NotificationService(db)
+    await notification_service.notify_ticket_assignment(
+        ticket=ticket,
+        assignee=assignee,
+        assigned_by=current_user,
+    )
     
     # Audit log
     await log_assign(

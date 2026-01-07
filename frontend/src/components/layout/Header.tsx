@@ -1,9 +1,8 @@
 import React from 'react';
-import { Layout, Button, Dropdown, Avatar, Badge, Space, Input } from 'antd';
+import { Layout, Button, Dropdown, Avatar, Space, Input } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  BellOutlined,
   UserOutlined,
   SettingOutlined,
   LogoutOutlined,
@@ -14,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { toggleSidebar } from '../../store/slices/uiSlice';
 import { useAuth } from '../../hooks/useAuth';
+import NotificationDropdown from '../notifications/NotificationDropdown';
 import type { RootState } from '../../app/store';
 
 const { Header: AntHeader } = Layout;
@@ -85,9 +85,7 @@ const Header: React.FC = () => {
       </Space>
 
       <Space size="middle">
-        <Badge count={5} size="small">
-          <Button type="text" icon={<BellOutlined style={{ fontSize: 18 }} />} />
-        </Badge>
+        <NotificationDropdown />
 
         <Dropdown
           menu={{
