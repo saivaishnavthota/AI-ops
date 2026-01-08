@@ -85,7 +85,7 @@ const Header: React.FC = () => {
       </Space>
 
       <Space size="middle">
-        <NotificationDropdown />
+        {/* <NotificationDropdown /> */}
 
         <Dropdown
           menu={{

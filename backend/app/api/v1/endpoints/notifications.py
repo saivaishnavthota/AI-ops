@@ -68,7 +68,27 @@ async def list_notifications(
     notifications = result.scalars().all()
 
     return NotificationListResponse(
-        items=[NotificationResponse.model_validate(n) for n in notifications],
+        items=[
+            NotificationResponse(
+                id=str(n.id),
+                organization_id=str(n.organization_id),
+                user_id=str(n.user_id),
+                title=n.title,
+                message=n.message,
+                type=n.type,
+                priority=n.priority,
+                is_read=n.is_read,
+                read_at=n.read_at,
+                action_url=n.action_url,
+                action_label=n.action_label,
+                related_entity_type=n.related_entity_type,
+                related_entity_id=n.related_entity_id,
+                expires_at=n.expires_at,
+                created_at=n.created_at,
+                updated_at=n.updated_at,
+            )
+            for n in notifications
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -130,7 +150,24 @@ async def get_notification(
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
 
-    return NotificationResponse.model_validate(notification)
+    return NotificationResponse(
+        id=str(notification.id),
+        organization_id=str(notification.organization_id),
+        user_id=str(notification.user_id),
+        title=notification.title,
+        message=notification.message,
+        type=notification.type,
+        priority=notification.priority,
+        is_read=notification.is_read,
+        read_at=notification.read_at,
+        action_url=notification.action_url,
+        action_label=notification.action_label,
+        related_entity_type=notification.related_entity_type,
+        related_entity_id=notification.related_entity_id,
+        expires_at=notification.expires_at,
+        created_at=notification.created_at,
+        updated_at=notification.updated_at,
+    )
 
 
 @router.post("/{notification_id}/read", response_model=NotificationResponse)

@@ -2,20 +2,27 @@ import { baseApi } from './baseApi';
 
 export interface Ticket {
     id: string;
-    organization_id: string;
+    organization_id?: string;
     subject: string;
     description: string;
     status: string;
     priority: string;
     category: string;
-    requester_id: string | null;
+    requester_id?: string | null;
     requester_name: string;
-    assignee_id: string | null;
+    assignee_id?: string | null;
     assignee_name: string | null;
     comments: Array<{ user: string; text: string; time: string }>;
     resolved_at: string | null;
     created_at: string;
     updated_at: string;
+    // External ticket properties
+    source?: 'internal' | 'external';
+    external_id?: string;
+    external_number?: string;
+    external_url?: string;
+    affected_cis?: string[];
+    sla_deadlines?: any;
 }
 
 export interface TicketCreateRequest {
@@ -68,6 +75,7 @@ export interface RelatedKBArticle {
     views: number;
     helpful_count: number;
     relevance_score: number;
+    match_percentage: number;
 }
 
 export interface KBArticleCreateRequest {
@@ -184,6 +192,48 @@ export const ticketsApi = baseApi.injectEndpoints({
             query: (ticketId) => `/tickets/${ticketId}/related-articles`,
             providesTags: (_result, _error, ticketId) => [{ type: 'Tickets', id: ticketId }],
         }),
+        getExternalSystemStatus: builder.query<{ external_systems: any[]; timestamp: string }, void>({
+            query: () => '/tickets/external/status',
+            providesTags: ['ExternalSystems'],
+        }),
+        getExternalTicket: builder.query<Ticket, string>({
+            query: (externalId) => `/tickets/external/${externalId}`,
+            providesTags: (_result, _error, id) => [{ type: 'ExternalTickets', id }],
+        }),
+        syncExternalTickets: builder.mutation<{ message: string; status: string; timestamp: string }, { force?: boolean }>({
+            query: ({ force = false }) => ({
+                url: '/tickets/external/sync',
+                method: 'POST',
+                params: { force },
+            }),
+            invalidatesTags: ['Tickets', 'ExternalSystems'],
+        }),
+        getAutoGeneratorStatus: builder.query<{ auto_generator: any; timestamp: string }, void>({
+            query: () => '/tickets/auto-generator/status',
+            providesTags: ['AutoGenerator'],
+        }),
+        startAutoGenerator: builder.mutation<{ message: string; status: string; timestamp: string }, { interval_minutes?: number }>({
+            query: ({ interval_minutes = 3 }) => ({
+                url: '/tickets/auto-generator/start',
+                method: 'POST',
+                params: { interval_minutes },
+            }),
+            invalidatesTags: ['AutoGenerator', 'Tickets'],
+        }),
+        stopAutoGenerator: builder.mutation<{ message: string; status: string; timestamp: string }, void>({
+            query: () => ({
+                url: '/tickets/auto-generator/stop',
+                method: 'POST',
+            }),
+            invalidatesTags: ['AutoGenerator', 'Tickets'],
+        }),
+        generateTicketNow: builder.mutation<{ message: string; ticket: any; timestamp: string }, void>({
+            query: () => ({
+                url: '/tickets/auto-generator/generate-now',
+                method: 'POST',
+            }),
+            invalidatesTags: ['Tickets'],
+        }),
     }),
 });
 
@@ -202,4 +252,11 @@ export const {
     useMarkKBArticleHelpfulMutation,
     useDeleteKBArticleMutation,
     useGetRelatedKBArticlesQuery,
+    useGetExternalSystemStatusQuery,
+    useGetExternalTicketQuery,
+    useSyncExternalTicketsMutation,
+    useGetAutoGeneratorStatusQuery,
+    useStartAutoGeneratorMutation,
+    useStopAutoGeneratorMutation,
+    useGenerateTicketNowMutation,
 } = ticketsApi;

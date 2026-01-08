@@ -25,6 +25,7 @@ from app.services.smart_routing_service import SmartRoutingService
 from app.services.proactive_support_service import ProactiveSupportService
 from app.services.ai_service import AIService
 from app.services.notification_service import NotificationService
+from app.services.external_ticketing_service import external_ticketing_service
 from app.core.audit_logger import log_create, log_update, log_delete, log_assign, log_resolve
 
 logger = logging.getLogger(__name__)
@@ -563,6 +564,278 @@ async def migrate_old_tickets_to_incidents(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Migration failed: {str(e)}"
+        )
+
+
+@router.get("/external/status")
+async def get_external_system_status(
+    current_user: CurrentUser,
+):
+    """Get status of external ticketing systems (Admin only)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view external system status",
+        )
+    
+    try:
+        external_status = await external_ticketing_service.get_external_system_status()
+        
+        return {
+            "external_systems": [
+                {
+                    "name": "GitHub Ticketing System",
+                    "type": "ITSM Platform",
+                    **external_status
+                }
+            ],
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting external system status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get external system status"
+        )
+
+
+@router.get("/external/{external_id}")
+async def get_external_ticket(
+    external_id: str,
+    current_user: CurrentUser,
+):
+    """Get a specific external ticket by ID (Admin only)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view external tickets",
+        )
+    
+    try:
+        external_ticket = await external_ticketing_service.get_external_ticket_by_id(external_id)
+        
+        if not external_ticket:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="External ticket not found",
+            )
+        
+        return external_ticket
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching external ticket {external_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch external ticket"
+        )
+
+
+@router.post("/external/sync")
+async def sync_external_tickets(
+    current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
+    force: bool = Query(False, description="Force sync even if recently synced"),
+):
+    """Trigger manual sync of external tickets (Admin only)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to sync external tickets",
+        )
+    
+    try:
+        # Add background task to sync external tickets
+        background_tasks.add_task(
+            _sync_external_tickets_background,
+            current_user.organization_id,
+            force
+        )
+        
+        return {
+            "message": "External ticket sync initiated",
+            "status": "in_progress",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error initiating external ticket sync: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to initiate external ticket sync"
+        )
+
+
+async def _sync_external_tickets_background(organization_id: UUID, force: bool = False):
+    """Background task to sync external tickets."""
+    try:
+        logger.info(f"Starting external ticket sync for organization {organization_id}")
+        
+        # Fetch external tickets
+        external_tickets = await external_ticketing_service.fetch_external_tickets(limit=100)
+        
+        logger.info(f"Synced {len(external_tickets)} external tickets for organization {organization_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in external ticket sync background task: {e}")
+
+
+@router.get("/auto-generator/status")
+async def get_auto_generator_status(
+    current_user: CurrentUser,
+):
+    """Get status of automatic ticket generation (Admin only)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view auto generator status",
+        )
+    
+    try:
+        from app.services.auto_ticket_generator import auto_ticket_generator
+        
+        status_info = auto_ticket_generator.get_status()
+        
+        return {
+            "auto_generator": {
+                **status_info,
+                "uptime_minutes": round(status_info["uptime_minutes"], 1) if status_info["uptime_minutes"] else None
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting auto generator status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get auto generator status"
+        )
+
+
+@router.post("/auto-generator/start")
+async def start_auto_generator(
+    current_user: CurrentUser,
+    interval_minutes: int = Query(3, ge=1, le=60, description="Interval between tickets in minutes"),
+):
+    """Start automatic ticket generation (Admin only)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to start auto generator",
+        )
+    
+    try:
+        from app.services.auto_ticket_generator import auto_ticket_generator
+        
+        await auto_ticket_generator.start_auto_generation(
+            interval_minutes=interval_minutes,
+            organization_id=current_user.organization_id
+        )
+        
+        return {
+            "message": f"Automatic ticket generation started with {interval_minutes} minute intervals",
+            "status": "started",
+            "interval_minutes": interval_minutes,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error starting auto generator: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start auto generator"
+        )
+
+
+@router.post("/auto-generator/stop")
+async def stop_auto_generator(
+    current_user: CurrentUser,
+):
+    """Stop automatic ticket generation (Admin only)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to stop auto generator",
+        )
+    
+    try:
+        from app.services.auto_ticket_generator import auto_ticket_generator
+        
+        await auto_ticket_generator.stop_auto_generation()
+        
+        return {
+            "message": "Automatic ticket generation stopped",
+            "status": "stopped",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error stopping auto generator: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to stop auto generator"
+        )
+
+
+@router.post("/auto-generator/generate-now")
+async def generate_ticket_now(
+    current_user: CurrentUser,
+):
+    """Generate a ticket immediately (Admin only)."""
+    
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to generate tickets",
+        )
+    
+    try:
+        from app.services.auto_ticket_generator import auto_ticket_generator
+        
+        ticket = await auto_ticket_generator.generate_single_ticket(
+            organization_id=current_user.organization_id
+        )
+        
+        if ticket:
+            return {
+                "message": "Ticket generated successfully",
+                "ticket": {
+                    "id": str(ticket.id),
+                    "subject": ticket.subject,
+                    "priority": ticket.priority,
+                    "category": ticket.category,
+                    "requester_name": ticket.requester_name
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate ticket"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating ticket: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate ticket"
         )
 
 
@@ -1302,13 +1575,24 @@ async def get_related_kb_articles(
         )
     
     try:
-        # Extract keywords from ticket (simple approach)
+        # Extract keywords from ticket (enhanced approach)
         ticket_text = f"{ticket.subject} {ticket.description}".lower()
         
-        # Simple keyword extraction - split and filter common words
-        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'what', 'which', 'who', 'when', 'where', 'why', 'how'}
-        words = [w.strip('.,!?;:()[]{}') for w in ticket_text.split()]
-        keywords = [w for w in words if len(w) > 3 and w not in stop_words][:10]
+        # Enhanced keyword extraction with better filtering
+        stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 
+            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 
+            'will', 'would', 'should', 'could', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 
+            'i', 'you', 'he', 'she', 'it', 'we', 'they', 'what', 'which', 'who', 'when', 'where', 'why', 
+            'how', 'not', 'no', 'yes', 'get', 'got', 'getting', 'go', 'going', 'went', 'come', 'came', 
+            'coming', 'see', 'saw', 'seen', 'look', 'looking', 'looked', 'make', 'made', 'making', 'take', 
+            'took', 'taken', 'taking', 'give', 'gave', 'given', 'giving', 'find', 'found', 'finding'
+        }
+        
+        # Clean and extract meaningful keywords
+        import re
+        words = re.findall(r'\b[a-zA-Z]{4,}\b', ticket_text.lower())  # Only words with 4+ characters
+        keywords = [w for w in words if w not in stop_words][:15]  # Increased to 15 keywords
         
         # Search for related KB articles
         from sqlalchemy import or_, and_
@@ -1316,8 +1600,8 @@ async def get_related_kb_articles(
         # Build search query with keywords and category
         search_conditions = []
         
-        # Add keyword searches
-        for keyword in keywords[:5]:  # Use top 5 keywords
+        # Add keyword searches with different weights
+        for keyword in keywords[:8]:  # Use top 8 keywords
             search_conditions.append(KnowledgeBaseArticle.title.ilike(f"%{keyword}%"))
             search_conditions.append(KnowledgeBaseArticle.content.ilike(f"%{keyword}%"))
             search_conditions.append(KnowledgeBaseArticle.excerpt.ilike(f"%{keyword}%"))
@@ -1325,7 +1609,7 @@ async def get_related_kb_articles(
         # Add category match (higher priority)
         search_conditions.append(KnowledgeBaseArticle.category == ticket.category)
         
-        # Query KB articles
+        # Query KB articles (get more to filter by relevance)
         if search_conditions:
             kb_result = await db.execute(
                 select(KnowledgeBaseArticle).where(
@@ -1337,7 +1621,7 @@ async def get_related_kb_articles(
                 ).order_by(
                     desc(KnowledgeBaseArticle.helpful_count),
                     desc(KnowledgeBaseArticle.views)
-                ).limit(limit)
+                ).limit(limit * 3)  # Get more articles to filter by relevance
             )
             
             articles = kb_result.scalars().all()
@@ -1357,15 +1641,35 @@ async def get_related_kb_articles(
             )
             articles = kb_result.scalars().all()
         
-        # Format response
+        # Calculate enhanced relevance scores
         related_articles = []
         for article in articles:
-            # Calculate simple relevance score based on keyword matches
-            relevance = 0.5  # Base score for category match
-            article_text = f"{article.title} {article.excerpt}".lower()
-            matches = sum(1 for kw in keywords[:5] if kw in article_text)
-            relevance += (matches / 5) * 0.5  # Add up to 0.5 for keyword matches
+            relevance_score = 0.0
             
+            # Article text for comparison
+            article_text = f"{article.title} {article.excerpt} {article.content}".lower()
+            article_title = article.title.lower()
+            
+            # 1. Category match (30% weight)
+            if article.category == ticket.category:
+                relevance_score += 0.3
+            
+            # 2. Title keyword matches (40% weight)
+            title_matches = sum(1 for kw in keywords[:8] if kw in article_title)
+            if title_matches > 0:
+                relevance_score += min(title_matches / 8, 1.0) * 0.4
+            
+            # 3. Content keyword matches (25% weight)
+            content_matches = sum(1 for kw in keywords[:8] if kw in article_text)
+            if content_matches > 0:
+                relevance_score += min(content_matches / 8, 1.0) * 0.25
+            
+            # 4. Popularity boost (5% weight)
+            if article.helpful_count > 0:
+                popularity_score = min(article.helpful_count / 10, 1.0) * 0.05
+                relevance_score += popularity_score
+            
+            # Include all articles with any relevance score
             related_articles.append({
                 "id": str(article.id),
                 "title": article.title,
@@ -1374,13 +1678,37 @@ async def get_related_kb_articles(
                 "tags": article.tags,
                 "views": article.views,
                 "helpful_count": article.helpful_count,
-                "relevance_score": min(relevance, 1.0),
+                "relevance_score": round(relevance_score, 3),
+                "match_percentage": round(relevance_score * 100, 1),
             })
         
-        # Sort by relevance score
+        # Sort by relevance score (highest first)
         related_articles.sort(key=lambda x: x['relevance_score'], reverse=True)
         
-        return related_articles
+        # Smart filtering logic: if more than 2 articles, show only high confidence ones
+        if len(related_articles) > 2:
+            # Calculate the average relevance score
+            avg_score = sum(article['relevance_score'] for article in related_articles) / len(related_articles)
+            # Set threshold as 20% above average, but minimum 0.4 (40%)
+            dynamic_threshold = max(avg_score * 1.2, 0.4)
+            
+            # Filter to high confidence articles
+            high_confidence_articles = [
+                article for article in related_articles 
+                if article['relevance_score'] >= dynamic_threshold
+            ]
+            
+            # If we have high confidence articles, use them; otherwise use top 2
+            if high_confidence_articles:
+                related_articles = high_confidence_articles[:limit]
+                logger.info(f"KB Article filtering: {len(related_articles)} high-confidence articles (threshold: {dynamic_threshold:.2f})")
+            else:
+                related_articles = related_articles[:2]
+                logger.info(f"KB Article filtering: Using top 2 articles (no high-confidence matches)")
+        else:
+            logger.info(f"KB Article filtering: {len(related_articles)} articles found")
+        
+        return related_articles[:limit]
         
     except Exception as e:
         logger.error(f"Error finding related KB articles: {e}")

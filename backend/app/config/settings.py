@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     AI_CORRELATION_ENABLED: bool = True
     AI_CONFIDENCE_THRESHOLD: float = 0.7
 
+    # External Integrations
+    EXTERNAL_TICKETING_API_URL: str = Field(
+        default="http://localhost:3001",
+        description="URL of the external ticketing system API"
+    )
+
     class Config:
         env_file = ".env"
         case_sensitive = True

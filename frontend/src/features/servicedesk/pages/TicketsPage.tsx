@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Table, Tag, Typography, Space, Button, Avatar, Input, Modal, Form, Select, message, Drawer, Descriptions, Timeline, Popconfirm, List, Divider } from 'antd';
-import { PlusOutlined, UserOutlined, SearchOutlined, CheckCircleOutlined, CommentOutlined, BookOutlined, LinkOutlined } from '@ant-design/icons';
+import { Card, Table, Tag, Typography, Space, Button, Avatar, Input, Modal, Form, Select, message, Drawer, Descriptions, Timeline, Popconfirm, List, Divider, Empty, Tooltip, Badge } from 'antd';
+import { PlusOutlined, UserOutlined, SearchOutlined, CheckCircleOutlined, CommentOutlined, BookOutlined, LinkOutlined, PlayCircleOutlined, PauseCircleOutlined, ThunderboltOutlined, RobotOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -10,9 +10,14 @@ import {
   useAssignTicketMutation,
   useResolveTicketWithFeedbackMutation,
   useGetRelatedKBArticlesQuery,
+  useGetAutoGeneratorStatusQuery,
+  useStartAutoGeneratorMutation,
+  useStopAutoGeneratorMutation,
+  useGenerateTicketNowMutation,
   Ticket,
 } from '../../../store/api/ticketsApi';
 import { useGetAssignableUsersQuery } from '../../../store/api/usersApi';
+import { useAuth } from '../../../hooks/useAuth';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -61,8 +66,38 @@ const RelatedKBArticlesSection: React.FC<RelatedKBArticlesSectionProps> = ({ tic
   }
 
   if (!relatedArticles || relatedArticles.length === 0) {
-    return null; // Don't show the section if no articles found
+    return (
+      <Card
+        title={
+          <Space>
+            <BookOutlined />
+            <span>Related Knowledge Base Articles</span>
+            <Tag color="blue">AI Recommended</Tag>
+          </Space>
+        }
+        size="small"
+      >
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <span>
+              No relevant articles found<br />
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Only articles with 70%+ relevance are shown
+              </Text>
+            </span>
+          }
+        />
+      </Card>
+    );
   }
+
+  const getMatchColor = (percentage: number) => {
+    if (percentage >= 90) return 'green';
+    if (percentage >= 80) return 'blue';
+    if (percentage >= 70) return 'orange';
+    return 'default';
+  };
 
   return (
     <Card
@@ -71,12 +106,13 @@ const RelatedKBArticlesSection: React.FC<RelatedKBArticlesSectionProps> = ({ tic
           <BookOutlined />
           <span>Related Knowledge Base Articles</span>
           <Tag color="blue">AI Recommended</Tag>
+          <Tag color="cyan">{relatedArticles.length} articles (70%+ match)</Tag>
         </Space>
       }
       size="small"
     >
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-        These articles might help resolve this ticket faster
+        High-relevance articles that might help resolve this ticket faster
       </Text>
       <List
         dataSource={relatedArticles}
@@ -93,7 +129,9 @@ const RelatedKBArticlesSection: React.FC<RelatedKBArticlesSectionProps> = ({ tic
                   <a onClick={(e) => { e.stopPropagation(); onViewArticle(article.id); }}>
                     {article.title}
                   </a>
-                  <Tag color="green">{Math.round(article.relevance_score * 100)}% match</Tag>
+                  <Tag color={getMatchColor(article.match_percentage)}>
+                    {article.match_percentage}% match
+                  </Tag>
                 </Space>
               }
               description={
@@ -126,12 +164,17 @@ const RelatedKBArticlesSection: React.FC<RelatedKBArticlesSectionProps> = ({ tic
 
 const TicketsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user, hasRole } = useAuth();
   const { data: ticketsData, isLoading } = useGetTicketsQuery({ skip: 0, limit: 100 });
   const { data: assignableUsers = [] } = useGetAssignableUsersQuery();
+  const { data: autoGeneratorStatus } = useGetAutoGeneratorStatusQuery();
   const [createTicket] = useCreateTicketMutation();
   const [updateTicket] = useUpdateTicketMutation();
   const [assignTicket] = useAssignTicketMutation();
   const [resolveTicketWithFeedback] = useResolveTicketWithFeedbackMutation();
+  const [startAutoGenerator, { isLoading: isStarting }] = useStartAutoGeneratorMutation();
+  const [stopAutoGenerator, { isLoading: isStopping }] = useStopAutoGeneratorMutation();
+  const [generateTicketNow, { isLoading: isGenerating }] = useGenerateTicketNowMutation();
 
   const [searchText, setSearchText] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -143,6 +186,8 @@ const TicketsPage: React.FC = () => {
   const [feedbackForm] = Form.useForm();
 
   const tickets = ticketsData?.items || [];
+  const isAutoGeneratorRunning = autoGeneratorStatus?.auto_generator?.is_running || false;
+  const ticketCount = autoGeneratorStatus?.auto_generator?.ticket_count || 0;
 
   const filteredTickets = tickets.filter(t =>
     t.subject.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -219,6 +264,33 @@ const TicketsPage: React.FC = () => {
     }
   };
 
+  const handleStartAutoGenerator = async () => {
+    try {
+      await startAutoGenerator({ interval_minutes: 2 }).unwrap();
+      message.success('Auto ticket generator started successfully');
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to start auto generator');
+    }
+  };
+
+  const handleStopAutoGenerator = async () => {
+    try {
+      await stopAutoGenerator().unwrap();
+      message.success('Auto ticket generator stopped successfully');
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to stop auto generator');
+    }
+  };
+
+  const handleGenerateNow = async () => {
+    try {
+      const result = await generateTicketNow().unwrap();
+      message.success(`Generated ticket: ${result.ticket.subject}`);
+    } catch (error: any) {
+      message.error(error?.data?.detail || 'Failed to generate ticket');
+    }
+  };
+
   const handleAddComment = async () => {
     if (!newComment.trim() || !selectedTicket) return;
 
@@ -252,6 +324,9 @@ const TicketsPage: React.FC = () => {
           <Space style={{ marginBottom: 4 }}>
             <Text strong>{record.id.substring(0, 8)}</Text>
             <Tag>{record.category}</Tag>
+            {record.source === 'auto_generated' && (
+              <Tag color="green" icon={<ThunderboltOutlined />}>Auto</Tag>
+            )}
           </Space>
           <div style={{ fontWeight: 500 }}>{text}</div>
         </div>
@@ -358,9 +433,54 @@ const TicketsPage: React.FC = () => {
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalOpen(true)}>
-            New Ticket
-          </Button>
+          {/* Auto Generator buttons - hidden for Operator role */}
+          {!hasRole(['operator']) && (
+            <>
+              <Tooltip title={`Auto Generator: ${isAutoGeneratorRunning ? 'Running' : 'Stopped'} | Generated: ${ticketCount} tickets`}>
+                <Badge count={ticketCount} showZero color={isAutoGeneratorRunning ? 'green' : 'red'}>
+                  <Button
+                    icon={<ThunderboltOutlined />}
+                    onClick={() => message.info(`Auto Generator: ${isAutoGeneratorRunning ? 'Running' : 'Stopped'} | Generated: ${ticketCount} tickets`)}
+                  >
+                    Auto Generator
+                  </Button>
+                </Badge>
+              </Tooltip>
+              {isAutoGeneratorRunning ? (
+                <Button
+                  icon={<PauseCircleOutlined />}
+                  onClick={handleStopAutoGenerator}
+                  loading={isStopping}
+                  title="Stop auto generator"
+                >
+                  Stop Auto
+                </Button>
+              ) : (
+                <Button
+                  icon={<PlayCircleOutlined />}
+                  onClick={handleStartAutoGenerator}
+                  loading={isStarting}
+                  title="Start auto generator"
+                >
+                  Start Auto
+                </Button>
+              )}
+              <Button
+                icon={<PlusOutlined />}
+                onClick={handleGenerateNow}
+                loading={isGenerating}
+                title="Generate ticket now"
+              >
+                Generate Now
+              </Button>
+            </>
+          )}
+          {/* New Ticket button - hidden for Operator role */}
+          {!hasRole(['operator']) && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateModalOpen(true)}>
+              New Ticket
+            </Button>
+          )}
         </Space>
       </div>
 
@@ -442,6 +562,28 @@ const TicketsPage: React.FC = () => {
                 <Tag color={priorityColors[selectedTicket.priority]}>{selectedTicket.priority.toUpperCase()}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Category"><Tag>{selectedTicket.category}</Tag></Descriptions.Item>
+              <Descriptions.Item label="Source">
+                {selectedTicket.source === 'external' ? (
+                  <Space>
+                    <Tag color="purple" icon={<LinkOutlined />}>External</Tag>
+                    {selectedTicket.external_url && (
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<LinkOutlined />}
+                        onClick={() => window.open(selectedTicket.external_url, '_blank')}
+                      >
+                        View in External System
+                      </Button>
+                    )}
+                  </Space>
+                ) : (
+                  <Tag color="blue">Internal</Tag>
+                )}
+              </Descriptions.Item>
+              {selectedTicket.external_number && (
+                <Descriptions.Item label="External ID">{selectedTicket.external_number}</Descriptions.Item>
+              )}
               <Descriptions.Item label="Requester">
                 <Space><Avatar size="small" icon={<UserOutlined />} />{selectedTicket.requester_name}</Space>
               </Descriptions.Item>
@@ -451,6 +593,15 @@ const TicketsPage: React.FC = () => {
                 ) : <Text type="secondary">Unassigned</Text>}
               </Descriptions.Item>
               <Descriptions.Item label="Created">{new Date(selectedTicket.created_at).toLocaleString()}</Descriptions.Item>
+              {selectedTicket.affected_cis && selectedTicket.affected_cis.length > 0 && (
+                <Descriptions.Item label="Affected CIs">
+                  <Space wrap>
+                    {selectedTicket.affected_cis.map((ci, index) => (
+                      <Tag key={index} color="orange">{ci}</Tag>
+                    ))}
+                  </Space>
+                </Descriptions.Item>
+              )}
             </Descriptions>
 
             <Card title="Description" size="small">
@@ -461,13 +612,26 @@ const TicketsPage: React.FC = () => {
               {selectedTicket.comments && selectedTicket.comments.length > 0 ? (
                 <Timeline
                   items={selectedTicket.comments.map((c: any) => ({
-                    color: 'blue',
-                    dot: <CommentOutlined />,
+                    color: c.author === 'AI Assistant' ? 'green' : 'blue',
+                    dot: c.author === 'AI Assistant' ? <RobotOutlined /> : <CommentOutlined />,
                     children: (
                       <div>
-                        <Text strong>{c.user}</Text>
-                        <Text type="secondary" style={{ marginLeft: 8 }}>{new Date(c.time).toLocaleString()}</Text>
-                        <Paragraph style={{ margin: '4px 0 0 0' }}>{c.text}</Paragraph>
+                        <Text strong>{c.author || c.user}</Text>
+                        {c.author === 'AI Assistant' && (
+                          <Tag color="green" size="small" style={{ marginLeft: 8 }}>
+                            AI Assistant
+                          </Tag>
+                        )}
+                        <Text type="secondary" style={{ marginLeft: 8 }}>
+                          {new Date(c.timestamp || c.time).toLocaleString()}
+                        </Text>
+                        <div style={{ margin: '8px 0 0 0' }}>
+                          {c.content ? (
+                            <div dangerouslySetInnerHTML={{ __html: c.content.replace(/\n/g, '<br/>') }} />
+                          ) : (
+                            <Paragraph style={{ margin: 0 }}>{c.text}</Paragraph>
+                          )}
+                        </div>
                       </div>
                     ),
                   }))}

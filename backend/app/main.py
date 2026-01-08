@@ -30,12 +30,22 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing Redis connection...")
     await init_redis()
 
+    # Initialize application services
+    logger.info("Initializing application services...")
+    from app.services.startup_service import startup_service
+    await startup_service.initialize_application()
+
     logger.info("AI-Ops Platform started successfully!")
 
     yield
 
     # Shutdown
     logger.info("Shutting down AI-Ops Platform...")
+    
+    # Shutdown application services
+    from app.services.startup_service import startup_service
+    await startup_service.shutdown_application()
+    
     await close_db()
     await close_redis()
     logger.info("AI-Ops Platform stopped.")

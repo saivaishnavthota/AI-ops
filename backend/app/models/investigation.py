@@ -65,7 +65,5 @@ class Investigation(BaseModel):
     organization = relationship("Organization", back_populates="investigations")
 
     def __repr__(self) -> str:
-        try:
-            return f"<Investigation {self.title}>"
-        except:
-            return f"<Investigation id={self.id}>"
+        # Avoid accessing lazy-loaded attributes in __repr__ to prevent DetachedInstanceError
+        return f"<Investigation id={self.id}>"

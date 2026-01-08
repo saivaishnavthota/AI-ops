@@ -71,10 +71,8 @@ class Playbook(BaseModel):
     executions = relationship("PlaybookExecution", back_populates="playbook", lazy="dynamic")
 
     def __repr__(self) -> str:
-        try:
-            return f"<Playbook {self.name}>"
-        except:
-            return f"<Playbook id={self.id}>"
+        # Avoid accessing lazy-loaded attributes in __repr__ to prevent DetachedInstanceError
+        return f"<Playbook id={self.id}>"
 
     @property
     def success_rate(self) -> float:
